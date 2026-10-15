@@ -49,6 +49,17 @@ android {
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
     }
 
+    // مفتاح توقيع ثابت لنسخ debug (ليس سراً: مفتاح تطوير عام). بدونه يولّد كل تشغيل على GitHub
+    // مفتاحاً جديداً فتتغير البصمة SHA-1 ويتعطل تسجيل الدخول بـ Google. للإصدار النهائي مفتاح منفصل لاحقاً.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

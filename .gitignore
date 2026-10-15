@@ -13,3 +13,6 @@ app/build/
 keystore.properties
 backend/app/config.php
 backend/app/cache/
+
+# مفتاح التوقيع التجريبي العام (انظر app/build.gradle.kts)
+!app/debug.keystore
