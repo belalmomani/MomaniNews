@@ -16,13 +16,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # Android SDK مثبّت مسبقاً على runner ubuntu-24.04، فلا نستخدم setup-android (فشل في تثبيت حزمة tools المحذوفة).
+      # نقبل التراخيص فقط؛ AGP ينزّل المنصة وأدوات البناء المطلوبة تلقائياً.
+      - name: Accept Android SDK licenses
+        run: yes | "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
