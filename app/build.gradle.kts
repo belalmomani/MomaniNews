@@ -16,6 +16,23 @@ if (rawApiBaseUrl.isNotEmpty() && apiBaseUrl.isEmpty()) {
     throw GradleException("apiBaseUrl must be a valid https:// URL")
 }
 
+// Supabase: الرابط والمفتاح العام (publishable/anon) عامّان بطبيعتهما ومصمَّمان للوجود داخل التطبيق؛
+// الحماية الفعلية في سياسات RLS. ممنوع وضع مفتاح service_role هنا إطلاقاً.
+// يمكن تجاوزهما بـ -PsupabaseUrl=... -PsupabaseKey=... (تُترك فارغة لتعطيل Supabase).
+fun prop(name: String, default: String) =
+    ((project.findProperty(name) as String?) ?: default).trim()
+val supabaseUrl = prop("supabaseUrl", "https://jpnifyumqmkbgxcqnyqb.supabase.co").trimEnd('/')
+val supabaseKey = prop("supabaseKey", "sb_publishable_sVF84cWS-dNvYn72x1risQ_z1_ewOUp")
+if (supabaseUrl.isNotEmpty() && !Regex("""https://[A-Za-z0-9.-]+""").matches(supabaseUrl)) {
+    throw GradleException("supabaseUrl must be a valid https:// origin")
+}
+if (supabaseKey.startsWith("eyJ") && supabaseKey.contains("service_role")) {
+    throw GradleException("Never embed a service_role key in the app")
+}
+if (!Regex("""[A-Za-z0-9._-]*""").matches(supabaseKey)) {
+    throw GradleException("supabaseKey contains invalid characters")
+}
+
 android {
     namespace = "com.momaninews.app"
     compileSdk = 35
@@ -28,6 +45,8 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
     }
 
     buildTypes {

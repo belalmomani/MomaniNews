@@ -68,3 +68,7 @@ app/src/main/java/com/momaninews/app/
 ## الخادم
 
 تقرر استخدام **Supabase** بدل PHP/MySQL. مخطط القاعدة وسياساتها واختباراتها في `supabase/` والتعليمات في `docs/SUPABASE_SETUP.md`. مجلد `backend/` (PHP) صار **قديماً (legacy)** وسيُقترح حذفه عند دمج التطبيق مع Supabase.
+
+### ربط التطبيق بـ Supabase (قراءة الأخبار)
+
+التطبيق يقرأ الأخبار من Supabase مباشرة (رابط المشروع والمفتاح العام مضبوطان افتراضياً في `app/build.gradle.kts`؛ يمكن تجاوزهما بـ `-PsupabaseUrl` و`-PsupabaseKey`). لا يُوضع `service_role` في التطبيق أبداً. للتحقق: شغّل `supabase/seed_sample_news.sql` في SQL Editor فتظهر 3 أخبار تجريبية، ولا يظهر الخبر المعلّق.
