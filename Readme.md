@@ -63,3 +63,8 @@ app/src/main/java/com/momaninews/app/
 - الخط الحالي هو خط النظام (يدعم العربية). لإضافة Cairo أو Tajawal ضع الملفات في `res/font` وعدّل `ui/theme/Type.kt`.
 - نسخة release تحتاج توقيعاً بمفتاح خاص قبل التثبيت أو النشر؛ تُعدّ في مرحلة الإصدار. لا ترفع ملفات المفاتيح إلى GitHub.
 - إصدارات المكتبات في `gradle/libs.versions.toml` لم تُختبر بالبناء بعد.
+
+
+## الخادم
+
+تقرر استخدام **Supabase** بدل PHP/MySQL. مخطط القاعدة وسياساتها واختباراتها في `supabase/` والتعليمات في `docs/SUPABASE_SETUP.md`. مجلد `backend/` (PHP) صار **قديماً (legacy)** وسيُقترح حذفه عند دمج التطبيق مع Supabase.
