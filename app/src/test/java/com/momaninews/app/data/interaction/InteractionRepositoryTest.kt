@@ -18,7 +18,7 @@ class InteractionRepositoryTest {
     private class FakeAuth(initial: User? = null) : AuthRepository {
         val state = MutableStateFlow(initial)
         override val currentUser: StateFlow<User?> = state
-        override suspend fun signIn(): User = throw UnsupportedOperationException()
+        override suspend fun signIn(context: android.content.Context): User = throw UnsupportedOperationException()
         override fun signOut() {
             state.value = null
         }

@@ -23,10 +23,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.auth.AuthRepository
+import com.momaninews.app.data.auth.SignInCancelledException
 import com.momaninews.app.ui.components.BannerAd
 import com.momaninews.app.ui.components.DemoBanner
 import kotlinx.coroutines.CancellationException
@@ -42,6 +44,7 @@ fun SignInScreen(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -74,7 +77,9 @@ fun SignInScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DemoBanner()
+            if (auth.isDemo) {
+                DemoBanner()
+            }
 
             Text(
                 text = "سجّل الدخول للتعليق والتصويت على مصداقية الأخبار.",
@@ -89,10 +94,12 @@ fun SignInScreen(
                     error = null
                     scope.launch {
                         try {
-                            auth.signIn()
+                            auth.signIn(context)
                             onDone()
                         } catch (e: CancellationException) {
                             throw e
+                        } catch (e: SignInCancelledException) {
+                            loading = false // أغلق المستخدم النافذة: لا رسالة خطأ
                         } catch (e: Exception) {
                             error = "تعذر تسجيل الدخول. حاول مرة أخرى."
                             loading = false
@@ -101,7 +108,13 @@ fun SignInScreen(
                 },
                 enabled = !loading
             ) {
-                Text(text = if (loading) "جارٍ الدخول…" else "دخول تجريبي")
+                Text(
+                    text = when {
+                        loading -> "جارٍ الدخول…"
+                        auth.isDemo -> "دخول تجريبي"
+                        else -> "الدخول بحساب Google"
+                    }
+                )
             }
 
             error?.let {
@@ -114,8 +127,11 @@ fun SignInScreen(
             }
 
             Text(
-                text = "الدخول بحساب Google سيُفعَّل بعد ربط الخادم وإنشاء معرّف عميل Google. " +
-                    "الدخول الحالي محلي في الذاكرة فقط ولا يحفظ أي بيانات.",
+                text = if (auth.isDemo) {
+                    "الدخول الحالي تجريبي محلي في الذاكرة فقط ولا يحفظ أي بيانات."
+                } else {
+                    "نستخدم حساب Google للتعرّف عليك فقط (الاسم والبريد والصورة). لا نصل إلى أي شيء آخر في حسابك."
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

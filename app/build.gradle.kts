@@ -23,6 +23,11 @@ fun prop(name: String, default: String) =
     ((project.findProperty(name) as String?) ?: default).trim()
 val supabaseUrl = prop("supabaseUrl", "https://jpnifyumqmkbgxcqnyqb.supabase.co").trimEnd('/')
 val supabaseKey = prop("supabaseKey", "sb_publishable_sVF84cWS-dNvYn72x1risQ_z1_ewOUp")
+// Web Client ID لتسجيل الدخول بـ Google (عام، ليس سراً؛ ممنوع وضع Client secret هنا). فارغ = الدخول التجريبي.
+val googleWebClientId = prop("googleWebClientId", "1010340161934-pjtln8j7lv7gmdtb9u7gfnvtkltjqrlk.apps.googleusercontent.com")
+if (!Regex("""([0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com)?""").matches(googleWebClientId)) {
+    throw GradleException("googleWebClientId is not a valid Google client ID")
+}
 if (supabaseUrl.isNotEmpty() && !Regex("""https://[A-Za-z0-9.-]+""").matches(supabaseUrl)) {
     throw GradleException("supabaseUrl must be a valid https:// origin")
 }
@@ -47,6 +52,7 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     // مفتاح توقيع ثابت لنسخ debug (ليس سراً: مفتاح تطوير عام). بدونه يولّد كل تشغيل على GitHub
@@ -104,6 +110,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.googleid)
     implementation(libs.startapp.inapp.sdk)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
