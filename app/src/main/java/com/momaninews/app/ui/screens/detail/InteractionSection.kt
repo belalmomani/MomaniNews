@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.auth.AuthRepository
+import com.momaninews.app.data.interaction.CommentRateLimitedException
 import com.momaninews.app.data.interaction.InteractionRepositories
 import com.momaninews.app.data.interaction.InteractionRepository
 import com.momaninews.app.data.interaction.InteractionRules
@@ -35,7 +36,7 @@ import com.momaninews.app.data.model.VoteSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** التصويت على المصداقية والتعليقات أسفل الخبر. حالياً تجريبي محلي. */
+/** التصويت على المصداقية والتعليقات أسفل الخبر (Supabase عند تفعيل الدخول الحقيقي، وإلا تجريبي محلي). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InteractionSection(
@@ -90,6 +91,8 @@ fun InteractionSection(
                 message = null
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: CommentRateLimitedException) {
+                message = "انتظر بضع ثوانٍ قبل نشر تعليق جديد."
             } catch (e: Exception) {
                 message = "تعذر نشر التعليق."
             }

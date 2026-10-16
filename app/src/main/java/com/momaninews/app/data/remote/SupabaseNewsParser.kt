@@ -46,7 +46,7 @@ object SupabaseNewsParser {
     private fun text(obj: JSONObject, key: String): String =
         if (obj.isNull(key)) "" else obj.optString(key, "")
 
-    private fun formatDate(iso: String): String {
+    fun formatDate(iso: String): String {
         if (iso.isEmpty()) return ""
         return try {
             OffsetDateTime.parse(iso)

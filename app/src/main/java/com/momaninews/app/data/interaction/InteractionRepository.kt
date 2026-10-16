@@ -1,7 +1,10 @@
 package com.momaninews.app.data.interaction
 
+import com.momaninews.app.BuildConfig
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.auth.AuthRepository
+import com.momaninews.app.data.auth.SupabaseAuthRepository
+import com.momaninews.app.data.remote.SupabaseRest
 import com.momaninews.app.data.model.Comment
 import com.momaninews.app.data.model.CredibilityVote
 import com.momaninews.app.data.model.User
@@ -86,6 +89,20 @@ class DemoInteractionRepository(private val auth: AuthRepository) : InteractionR
     }
 }
 
+/**
+ * Supabase إن كان الدخول الحقيقي مفعّلاً (SupabaseAuthRepository)، وإلا التنفيذ التجريبي المحلي.
+ * تُقرأ بعد Application.onCreate (حيث تُهيَّأ AuthRepositories).
+ */
 object InteractionRepositories {
-    val default: InteractionRepository = DemoInteractionRepository(AuthRepositories.default)
+    val default: InteractionRepository by lazy {
+        val auth = AuthRepositories.default
+        if (auth is SupabaseAuthRepository) {
+            SupabaseInteractionRepository(
+                rest = SupabaseRest(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_KEY),
+                tokenProvider = { auth.accessToken() }
+            )
+        } else {
+            DemoInteractionRepository(auth)
+        }
+    }
 }
