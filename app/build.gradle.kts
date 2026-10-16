@@ -24,7 +24,7 @@ fun prop(name: String, default: String) =
 val supabaseUrl = prop("supabaseUrl", "https://jpnifyumqmkbgxcqnyqb.supabase.co").trimEnd('/')
 val supabaseKey = prop("supabaseKey", "sb_publishable_sVF84cWS-dNvYn72x1risQ_z1_ewOUp")
 // Web Client ID لتسجيل الدخول بـ Google (عام، ليس سراً؛ ممنوع وضع Client secret هنا). فارغ = الدخول التجريبي.
-val googleWebClientId = prop("googleWebClientId", "1010340161934-pjtln8j7lv7gmdtb9u7gfnvtkltjqrlk.apps.googleusercontent.com")
+val googleWebClientId = prop("googleWebClientId", "1010340161934-tq8qfngl6b8l4lt73rd8fddvblflv66a.apps.googleusercontent.com")
 if (!Regex("""([0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com)?""").matches(googleWebClientId)) {
     throw GradleException("googleWebClientId is not a valid Google client ID")
 }
