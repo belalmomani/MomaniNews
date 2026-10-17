@@ -80,10 +80,21 @@ fun AdminHomeScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
 fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { r ->
     AdminListScreen(
         "الأخبار", onBack, listOf(
-            AdminTab("بانتظار الاعتماد", "لا توجد أخبار معلّقة", { r.pendingNews() }) { listOf(
+            AdminTab("بانتظار الاعتماد", "لا توجد أخبار معلّقة", { r.pendingNews() }) { n -> listOf(
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },
-                AdminAction("رفض", danger = true, confirm = "رفض هذا الخبر؟") { i, _ -> r.setNewsStatus(i.ref, "rejected") }
+                AdminAction("تعديل العنوان", prompt = "العنوان المعروض", promptDefault = n.title) { i, text -> r.editNewsText(i.ref, text, null) },
+                AdminAction("تعديل الملخص", prompt = "الملخص المعروض", promptDefault = n.extra) { i, text -> r.editNewsText(i.ref, null, text) },
+                AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") }
             ) },
+            AdminTab("عمليات الجلب", "لا توجد عمليات جلب بعد", { r.fetchRuns() }) { emptyList() },
+            AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "الصيغة: النوع الكلمة [المنطقة] [ctx] — مثال: region عبين abeen")) + r.keywords() }) { k ->
+                if (k.ref == "add") listOf(AdminAction("إضافة", prompt = "النوع الكلمة [abeen/abelin/sakhra/momani] [ctx]") { _, text -> r.addKeyword(text ?: "") })
+                else listOf(
+                    AdminAction(if (k.flag) "تعطيل" else "تفعيل") { i, _ -> r.setKeywordActive(i.ref, !i.flag) },
+                    AdminAction("حذف", danger = true, confirm = "حذف الكلمة؟") { i, _ -> r.deleteKeyword(i.ref) }
+                )
+            },
+            AdminTab("حالة المصادر", "لا توجد مصادر", { r.sourceStatus() }) { emptyList() },
             AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { listOf(
                 AdminAction("أرشفة", confirm = "أرشفة الخبر (يختفي من التطبيق)؟") { i, _ -> r.setNewsStatus(i.ref, "archived") },
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },

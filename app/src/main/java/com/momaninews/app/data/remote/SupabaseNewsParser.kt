@@ -15,7 +15,7 @@ import org.json.JSONObject
  */
 object SupabaseNewsParser {
 
-    const val SELECT = "id,title,excerpt,content,source_name,published_at,image_url,video_url,regions(id,name_ar)"
+    const val SELECT = "id,title,excerpt,content,source_name,published_at,image_url,video_url,original_url,regions(id,name_ar)"
 
     fun parseList(json: String): List<NewsItem> {
         val array = JSONArray(json)
@@ -41,7 +41,8 @@ object SupabaseNewsParser {
             region = Region(id = region.getString("id"), nameAr = region.getString("name_ar")),
             isSample = false,
             imageUrl = httpsOrNull(text(obj, "image_url")),
-            videoUrl = httpsOrNull(text(obj, "video_url"))
+            videoUrl = httpsOrNull(text(obj, "video_url")),
+            sourceUrl = httpsOrNull(text(obj, "original_url"))
         )
     }
 

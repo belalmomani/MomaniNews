@@ -31,7 +31,27 @@ data class AdminItem(
 
 val ADMIN_REGIONS = listOf("abeen" to "عبين", "abelin" to "عبلين", "sakhra" to "صخرة")
 
+data class KeywordInput(val kind: String, val word: String, val regionId: String?, val needsContext: Boolean)
+
 object AdminRules {
+    val KEYWORD_KINDS = listOf("region", "alias", "name", "context", "exclude")
+    fun kindLabel(kind: String) = when (kind) {
+        "region" -> "منطقة"; "alias" -> "اسم بديل"; "name" -> "اسم شخص"; "context" -> "سياق"; "exclude" -> "استبعاد"; else -> kind
+    }
+    private val REGION_IDS = setOf("abeen", "abelin", "sakhra", "momani")
+    /** «النوع الكلمة [المنطقة] [ctx]»؛ المنطقة إلزامية لـ region/alias، وctx تعني «تحتاج سياق». */
+    fun parseKeywordInput(text: String): KeywordInput? {
+        val parts = text.trim().split(Regex("\\s+")).toMutableList()
+        if (parts.size < 2) return null
+        val kind = parts.removeAt(0).lowercase()
+        if (kind !in KEYWORD_KINDS) return null
+        val ctx = parts.remove("ctx")
+        val region = parts.lastOrNull()?.takeIf { it in REGION_IDS }?.also { parts.removeAt(parts.size - 1) }
+        val word = parts.joinToString(" ").trim()
+        if (word.isEmpty() || word.length > 80) return null
+        if ((kind == "region" || kind == "alias") && region == null) return null
+        return KeywordInput(kind, word, region, ctx)
+    }
     /** مدة الإعلان المسموحة بالأيام (نفس لوحة الويب). null إن كانت غير صالحة. */
     fun parseDays(text: String?): Int? = text?.trim()?.toIntOrNull()?.takeIf { it in 1..365 }
 
@@ -98,9 +118,21 @@ object AdminParser {
                 ref = r.get("id").toString(),
                 title = str(r, "title"),
                 meta = listOf(region, str(r, "source_name"), date(r, "created_at")).filter { it.isNotBlank() }.joinToString(" • "),
-                body = str(r, "excerpt")
+                body = listOf(str(r, "excerpt"), fetchInfo(r)).filter { it.isNotBlank() }.joinToString("\n\n"),
+                extra = str(r, "excerpt")
             )
         }
+    }
+
+    /** معلومات الأخبار المجلوبة تلقائياً: الكلمات المطابقة والرابط الأصلي وملاحظة الجلب. */
+    private fun fetchInfo(r: JSONObject): String {
+        val terms = r.optJSONArray("matched_terms")
+        val words = if (terms == null) "" else (0 until terms.length()).joinToString("، ") { terms.optString(it) }
+        val parts = mutableListOf<String>()
+        if (words.isNotBlank()) parts += "الكلمات المطابقة: $words"
+        str(r, "original_url").takeIf { it.isNotBlank() }?.let { parts += "المصدر الأصلي: $it" }
+        str(r, "fetch_note").takeIf { it.isNotBlank() }?.let { parts += "ملاحظة الجلب: $it" }
+        return parts.joinToString("\n")
     }
 
     fun comments(json: String): List<AdminItem> {
@@ -197,12 +229,75 @@ class AdminRepository(
     }
 
     // ---- الأخبار
-    suspend fun pendingNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,created_at,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
+    suspend fun pendingNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
     suspend fun allNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,created_at,regions(name_ar)&status=neq.pending&order=created_at.desc&limit=50"))
     suspend fun setNewsStatus(ref: String, status: String) {
         require(status in listOf("approved", "rejected", "archived"))
         write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("status", status))
     }
+    /** رفض مع سبب يُحفظ في review_note (يراه المشرفون فقط). */
+    suspend fun rejectNews(ref: String, reason: String) {
+        val note = reason.trim().take(500)
+        write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("status", "rejected").put("review_note", if (note.isEmpty()) JSONObject.NULL else note))
+    }
+    /** تعديل العنوان/الملخص المعروضين قبل الاعتماد. */
+    suspend fun editNewsText(ref: String, title: String?, excerpt: String?) {
+        val body = JSONObject()
+        title?.let { val t = AdminRules.cleanText(it, 300); require(t.length >= 5) { "العنوان قصير" }; body.put("title", t) }
+        excerpt?.let { body.put("excerpt", it.trim().take(600)) }
+        write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", body)
+    }
+    suspend fun fetchRuns(): List<AdminItem> {
+        val a = JSONArray(get("fetch_runs?select=id,started_at,trigger,sources_total,sources_failed,items_seen,items_matched,items_inserted,items_duplicate,error_summary&order=started_at.desc&limit=30"))
+        return List(a.length()) { i ->
+            val r = a.getJSONObject(i)
+            AdminItem(
+                ref = r.get("id").toString(),
+                title = "جلب " + (if (r.optString("trigger") == "manual") "يدوي" else "مجدول") + " — " + SupabaseNewsParser.formatDate(r.optString("started_at")) + " " + r.optString("started_at").drop(11).take(5),
+                meta = "مصادر ${r.optInt("sources_total")} (فشل ${r.optInt("sources_failed")}) • فُحص ${r.optInt("items_seen")} • مطابق ${r.optInt("items_matched")} • جديد ${r.optInt("items_inserted")} • مكرر ${r.optInt("items_duplicate")}",
+                body = if (r.isNull("error_summary")) "" else r.optString("error_summary"),
+                flag = r.optInt("sources_failed") > 0
+            )
+        }
+    }
+    suspend fun sourceStatus(): List<AdminItem> {
+        val a = JSONArray(get("sources?select=id,name,url,kind,is_active,last_status,last_error,last_success_at&order=name.asc&limit=100"))
+        return List(a.length()) { i ->
+            val r = a.getJSONObject(i)
+            val st = if (r.isNull("last_status")) "لم يُجلب بعد" else r.optString("last_status")
+            AdminItem(
+                ref = r.get("id").toString(),
+                title = r.optString("name") + if (r.optBoolean("is_active", true)) "" else " (معطّل)",
+                meta = "${r.optString("kind")} • $st" + (if (r.isNull("last_success_at")) "" else " • آخر نجاح " + SupabaseNewsParser.formatDate(r.optString("last_success_at"))),
+                body = (if (r.isNull("last_error")) "" else "الخطأ: " + r.optString("last_error") + "\n") + r.optString("url"),
+                flag = !r.isNull("last_error")
+            )
+        }
+    }
+    // ---- الكلمات المفتاحية لمحرك الجلب
+    suspend fun keywords(): List<AdminItem> {
+        val a = JSONArray(get("keywords?select=id,word,kind,region_id,needs_context,is_active&order=kind.asc,word.asc&limit=300"))
+        return List(a.length()) { i ->
+            val r = a.getJSONObject(i)
+            val active = r.optBoolean("is_active", true)
+            AdminItem(
+                ref = r.get("id").toString(),
+                title = r.optString("word") + if (active) "" else " (معطّلة)",
+                meta = AdminRules.kindLabel(r.optString("kind")) + (if (r.isNull("region_id")) "" else " • " + r.optString("region_id")) + (if (r.optBoolean("needs_context")) " • تحتاج سياق" else ""),
+                flag = active
+            )
+        }
+    }
+    /** الإدخال: «النوع الكلمة [رقم المنطقة]» مثل: region عبين abeen */
+    suspend fun addKeyword(input: String) {
+        val p = AdminRules.parseKeywordInput(input) ?: throw IOException("الصيغة: النوع الكلمة [المنطقة] — النوع: region/alias/name/context/exclude")
+        val body = JSONObject().put("word", p.word).put("kind", p.kind).put("needs_context", p.needsContext)
+        if (p.regionId != null) body.put("region_id", p.regionId)
+        write("POST", "keywords", body)
+    }
+    suspend fun setKeywordActive(ref: String, active: Boolean) =
+        write("PATCH", "keywords?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_active", active))
+    suspend fun deleteKeyword(ref: String) = write("DELETE", "keywords?id=eq.${AdminRules.safeId(ref)}", null)
     suspend fun deleteNews(ref: String) = write("DELETE", "news?id=eq.${AdminRules.safeId(ref)}", null)
 
     suspend fun addNews(title: String, excerpt: String, content: String, source: String, regionId: String, publish: Boolean, imageUrl: String? = null, videoUrl: String? = null) {

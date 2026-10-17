@@ -66,7 +66,7 @@ fun HomeScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "أخبار المومني",
+                        text = "المومني نيوز",
                         style = MaterialTheme.typography.titleLarge
                     )
                 },

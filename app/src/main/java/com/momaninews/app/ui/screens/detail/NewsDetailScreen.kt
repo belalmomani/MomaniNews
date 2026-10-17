@@ -183,6 +183,37 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
                     )
                 }
 
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            news.sourceUrl?.let { link ->
+                Text(
+                    text = "المصدر: " + news.source.ifBlank { "الموقع الأصلي" } + " — الخبر منقول باختصار، والتفاصيل الكاملة عند المصدر.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                androidx.compose.material3.Button(onClick = {
+                    runCatching {
+                        ctx.startActivity(
+                            android.content.Intent(android.content.Intent.ACTION_VIEW)
+                                .setData(android.net.Uri.parse(link))
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }) { Text("فتح المصدر") }
+            }
+            androidx.compose.material3.OutlinedButton(onClick = {
+                val body = news.title + (news.sourceUrl?.let { "\n" + it } ?: "") + "\n\nعبر تطبيق المومني نيوز"
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND)
+                                .setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, body),
+                            "مشاركة الخبر"
+                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }) { Text("مشاركة") }
+
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             InteractionSection(

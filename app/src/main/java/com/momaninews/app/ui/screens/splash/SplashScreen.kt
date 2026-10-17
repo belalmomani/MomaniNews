@@ -1,20 +1,23 @@
 package com.momaninews.app.ui.screens.splash
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.momaninews.app.R
 import kotlinx.coroutines.delay
 
 private const val SPLASH_DURATION_MS = 1500L
@@ -28,26 +31,18 @@ fun SplashScreen(onFinished: () -> Unit) {
         currentOnFinished()
     }
 
-    Column(
+    // خلفية بنفس تدرج أزرق الشعار حتى لا تظهر حواف الشعار المستدير.
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(Brush.verticalGradient(listOf(Color(0xFF0A5CB8), Color(0xFF032E6D)))),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "أخبار المومني",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onPrimary,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "MomaniNews",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp)
+        Image(
+            painter = painterResource(R.drawable.logo_full),
+            contentDescription = "المومني نيوز — كل أخبار عبين وعبلين وصخرة في مكان واحد",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().padding(48.dp)
         )
     }
 }

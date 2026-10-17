@@ -124,7 +124,7 @@ begin
   perform t.chk('news: الزائر يرى المعتمد حديثاً', t.sel(null, anon, 'select count(*) from public.news'), '2');
   perform t.chk('admin_logs: تغيير الحالة سُجّل', t.sel(uc, au, format('select count(*) from public.admin_logs where entity_type=''news'' and entity_id=%L and admin_id=%L', n_pend::text, uc)), '1');
   perform t.chk('news: الأدمن يرجعه معلقاً', t.dml(uc, au, format('update public.news set status=''pending'', published_at=null where id=%s', n_pend)), '1');
-  perform t.chk('regions: قراءة عامة', t.sel(null, anon, 'select count(*) from public.regions'), '3');
+  perform t.chk('regions: قراءة عامة', t.sel(null, anon, 'select count(*) from public.regions'), '4');
   perform t.chk('regions: المستخدم لا يضيف', t.dml(ua, au, 'insert into public.regions (id,name_ar) values (''x'',''x'')'), 'ERR:42501');
 
   -- ---------- التصويت ----------
@@ -259,12 +259,12 @@ begin
   perform t.chk('sources: الأدمن يرى الكل', t.sel(uc, au, 'select count(*) from public.sources'), '2');
   perform t.chk('sources: المستخدم لا يضيف', t.dml(ua, au, 'insert into public.sources (name,url) values (''x'',''https://c.example'')'), 'ERR:42501');
   perform t.chk('sources: رابط http مرفوض', t.dml(uc, au, 'insert into public.sources (name,url) values (''x'',''http://c.example'')'), 'ERR:23514');
-  insert into public.keywords (word) values ('عبين');
+  insert into public.keywords (word) values ('كلمة-اختبار-1');
   perform t.chk('keywords: المستخدم لا يرى', t.sel(ua, au, 'select count(*) from public.keywords'), '0');
   perform t.chk('keywords: الزائر مرفوض', t.sel(null, anon, 'select count(*) from public.keywords'), 'ERR:42501');
   perform t.chk('keywords: المستخدم لا يضيف', t.dml(ua, au, 'insert into public.keywords (word) values (''x'')'), 'ERR:42501');
-  perform t.chk('keywords: الأدمن يضيف', t.dml(uc, au, 'insert into public.keywords (word) values (''عبلين'')'), '1');
-  perform t.chk('keywords: التكرار مرفوض (حالة أحرف/مسافات)', t.dml(uc, au, 'insert into public.keywords (word) values ('' عبلين '')'), 'ERR:23505');
+  perform t.chk('keywords: الأدمن يضيف', t.dml(uc, au, 'insert into public.keywords (word) values (''كلمة-اختبار-2'')'), '1');
+  perform t.chk('keywords: التكرار مرفوض (حالة أحرف/مسافات)', t.dml(uc, au, 'insert into public.keywords (word) values ('' كلمة-اختبار-2 '')'), 'ERR:23505');
   perform t.chk('failed_fetch: المستخدم لا يكتب', t.dml(ua, au, 'insert into public.failed_fetch_logs (url) values (''x'')'), 'ERR:42501');
   perform t.chk('failed_fetch: service_role يكتب', t.dml(null, sr, 'insert into public.failed_fetch_logs (url,error) values (''https://a.example'',''timeout'')'), '1');
   perform t.chk('failed_fetch: المستخدم لا يرى', t.sel(ua, au, 'select count(*) from public.failed_fetch_logs'), '0');
@@ -300,6 +300,22 @@ begin
   perform t.chk('media: الأدمن يحذف', t.dml(uc, au, 'delete from storage.objects where bucket_id=''news-media'''), '1');
   perform t.chk('media: video_url http مرفوض', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''http://x.y/v.mp4'')'), 'ERR:23514');
   perform t.chk('media: video_url https مقبول', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''https://x.y/v.mp4'')'), '1');
+
+  -- ---------- محرك الجلب ----------
+  perform t.chk('fetch: كلمات ابتدائية موجودة', t.sel(null, su, 'select count(*) from public.keywords where kind=''region'''), '3');
+  perform t.chk('fetch: صخرة تحتاج سياقاً', t.sel(null, su, 'select needs_context::text from public.keywords where word=''صخرة'''), 'true');
+  perform t.chk('fetch: منطقة momani موجودة', t.sel(null, su, 'select count(*) from public.regions where id=''momani'''), '1');
+  perform t.chk('fetch: service_role يكتب fetch_runs', t.dml(null, sr, 'insert into public.fetch_runs (sources_total) values (2)'), '1');
+  perform t.chk('fetch: الأدمن يقرأ fetch_runs', t.sel(uc, au, 'select count(*) from public.fetch_runs'), '1');
+  perform t.chk('fetch: المستخدم العادي لا يرى fetch_runs', t.sel(ua, au, 'select count(*) from public.fetch_runs'), '0');
+  perform t.chk('fetch: الزائر محظور من fetch_runs', t.sel(null, anon, 'select count(*) from public.fetch_runs'), 'ERR:42501');
+  perform t.chk('fetch: المستخدم لا يكتب fetch_runs', t.dml(ua, au, 'insert into public.fetch_runs (sources_total) values (1)'), 'ERR:42501');
+  perform t.chk('fetch: بصمة تكرار تُقبل', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب1'',''ن'',''abeen'',repeat(''a'',64))'), '1');
+  perform t.chk('fetch: نفس البصمة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب2'',''ن'',''abelin'',repeat(''a'',64))'), 'ERR:23505');
+  perform t.chk('fetch: بصمة غير صالحة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب3'',''ن'',''abeen'',''xyz'')'), 'ERR:23514');
+  perform t.chk('fetch: المجلوب pending لا يظهر للعامة', t.sel(null, anon, 'select count(*) from public.news where fingerprint is not null'), '0');
+  perform t.chk('fetch: news_refs للأدمن فقط', t.sel(ua, au, 'select count(*) from public.news_refs'), '0');
+  perform t.chk('fetch: الزائر لا يقرأ news_refs', t.sel(null, anon, 'select count(*) from public.news_refs'), 'ERR:42501');
 
   -- ---------- حذف الحساب الذاتي ----------
   perform t.chk('delete_my_account: الزائر مرفوض', t.sel(null, anon, 'select public.delete_my_account()'), 'ERR:42501');

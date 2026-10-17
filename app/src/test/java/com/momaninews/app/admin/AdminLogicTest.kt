@@ -178,4 +178,16 @@ class AdminLogicTest {
         assertEquals("https://x.y/v.mp4", items[1].videoUrl)
         assertNull(items[2].imageUrl); assertNull(items[2].videoUrl)
     }
+
+    @Test fun keywordInputParsing() {
+        val a = AdminRules.parseKeywordInput("region عبين abeen")!!
+        assertEquals("region", a.kind); assertEquals("عبين", a.word); assertEquals("abeen", a.regionId); assertFalse(a.needsContext)
+        val b = AdminRules.parseKeywordInput("region صخرة sakhra ctx")!!
+        assertTrue(b.needsContext); assertEquals("صخرة", b.word)
+        val c = AdminRules.parseKeywordInput("exclude قبة الصخرة")!!
+        assertEquals("قبة الصخرة", c.word); assertNull(c.regionId)
+        assertNull(AdminRules.parseKeywordInput("region عبين"))      // المنطقة إلزامية
+        assertNull(AdminRules.parseKeywordInput("bogus كلمة"))
+        assertNull(AdminRules.parseKeywordInput("name"))
+    }
 }

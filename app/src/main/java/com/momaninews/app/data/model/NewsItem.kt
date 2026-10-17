@@ -27,5 +27,7 @@ data class NewsItem(
     /** رابط https لصورة الخبر (اختياري). */
     val imageUrl: String? = null,
     /** رابط https لفيديو MP4 (اختياري). */
-    val videoUrl: String? = null
+    val videoUrl: String? = null,
+    /** الرابط الأصلي للخبر عند المصدر (للأخبار المجلوبة). https فقط. */
+    val sourceUrl: String? = null
 )
