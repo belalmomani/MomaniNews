@@ -8,5 +8,7 @@ data class User(
     val email: String,
     val verification: VerificationStatus = VerificationStatus.NONE,
     /** true للحساب التجريبي المحلي فقط؛ لا يوجد مثله على الخادم. */
-    val isDemo: Boolean = false
+    val isDemo: Boolean = false,
+    /** للعرض فقط (إظهار قسم الإدارة). الصلاحية الفعلية تفرضها القاعدة (RLS) عند كل طلب. */
+    val isAdmin: Boolean = false
 )

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,6 +42,11 @@ private fun verificationLabel(status: VerificationStatus): String = when (status
 fun ProfileScreen(
     onBack: () -> Unit,
     onSignInClick: () -> Unit,
+    onVerificationClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    onAdRequestClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAdminClick: () -> Unit,
     auth: AuthRepository = AuthRepositories.default
 ) {
     val user by auth.currentUser.collectAsStateWithLifecycle()
@@ -60,10 +66,16 @@ fun ProfileScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = "الإعدادات")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -106,7 +118,16 @@ fun ProfileScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    // زر طلب التوثيق ومتابعة حالته يُضافان في الخطوة التالية من المرحلة 4.
+                    if (!current.isDemo && current.verification != VerificationStatus.APPROVED) {
+                        Button(onClick = onVerificationClick) {
+                            Text(text = if (current.verification == VerificationStatus.NONE) "طلب التوثيق" else "حالة طلب التوثيق")
+                        }
+                    }
+                    OutlinedButton(onClick = onNotificationsClick) { Text(text = "الإشعارات") }
+                    OutlinedButton(onClick = onAdRequestClick) { Text(text = "أعلن معنا") }
+                    if (current.isAdmin) {
+                        Button(onClick = onAdminClick) { Text(text = "لوحة الإدارة") }
+                    }
                     OutlinedButton(onClick = { auth.signOut() }) {
                         Text(text = "تسجيل الخروج")
                     }

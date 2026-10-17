@@ -70,7 +70,8 @@ object SupabaseAuthParser {
                 "rejected" -> VerificationStatus.REJECTED
                 else -> VerificationStatus.NONE
             },
-            isDemo = false
+            isDemo = false,
+            isAdmin = row.optString("role", "user") == "admin" && !row.optBoolean("is_banned", false)
         )
     }
 }

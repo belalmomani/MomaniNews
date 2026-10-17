@@ -36,7 +36,7 @@ class SupabaseAuthApi(supabaseUrl: String, private val publicKey: String) {
     }
 
     fun fetchProfile(session: AuthSession): User? {
-        val path = "/rest/v1/users?select=id,email,display_name,verification&id=eq.${session.userId}&limit=1"
+        val path = "/rest/v1/users?select=id,email,display_name,verification,role,is_banned&id=eq.${session.userId}&limit=1"
         return SupabaseAuthParser.parseProfile(request("GET", path, null, session.accessToken))
     }
 
