@@ -5,7 +5,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.momaninews.app.BuildConfig
 import com.momaninews.app.data.auth.Nonce
-import com.momaninews.app.data.verification.ImagePrep
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.auth.SupabaseAuthRepository
 import com.momaninews.app.data.remote.SupabaseNewsParser
@@ -48,17 +47,29 @@ object AdminRules {
 
     const val MAX_VIDEO_BYTES = 50L * 1024 * 1024 // حد الحاوية في القاعدة (الخطة المجانية)
 
-    /** يُقبل MP4 فقط (نفس الأنواع المسموحة في الحاوية). */
-    fun isMp4(mime: String?): Boolean = mime == "video/mp4"
+    /** نوع MIME ← امتداد الملف. نفس الأنواع المسموحة في حاوية news-media (انظر migration 20261017140000). */
+    private val VIDEO_EXT = mapOf(
+        "video/mp4" to "mp4", "video/webm" to "webm", "video/3gpp" to "3gp",
+        "video/quicktime" to "mov", "video/x-matroska" to "mkv"
+    )
+    private val IMAGE_EXT = mapOf("image/png" to "png", "image/webp" to "webp", "image/gif" to "gif", "image/jpeg" to "jpg")
+    private val CONTENT_TYPE = (VIDEO_EXT.entries + IMAGE_EXT.entries).associate { it.value to it.key }
+
+    fun videoExt(mime: String?): String? = VIDEO_EXT[mime]
+    fun imageExt(mime: String?): String? = IMAGE_EXT[mime]
+    fun contentTypeFor(ext: String): String? = CONTENT_TYPE[ext]
 
     /** مسار ملف وسائط: شهر/اسم عشوائي.امتداد. [random] مُمرَّر للاختبار. */
     fun mediaPath(yearMonth: String, random: String, ext: String): String {
-        require(yearMonth.matches(Regex("[0-9]{6}")) && random.matches(Regex("[A-Za-z0-9_-]{8,64}")) && ext in listOf("jpg", "mp4"))
+        require(yearMonth.matches(Regex("[0-9]{6}")) && random.matches(Regex("[A-Za-z0-9_-]{8,64}")) && ext in CONTENT_TYPE.keys)
         return "$yearMonth/$random.$ext"
     }
 
     fun publicMediaUrl(base: String, path: String): String =
         base.trimEnd('/') + "/storage/v1/object/public/news-media/" + path
+
+    /** true إن كانت استجابة return=representation تحوي صفاً واحداً على الأقل. */
+    fun affectedRows(json: String): Boolean = runCatching { JSONArray(json).length() > 0 }.getOrDefault(false)
 
     fun cleanText(text: String, max: Int): String = text.trim().take(max)
 
@@ -174,9 +185,15 @@ class AdminRepository(
         r.body
     }
 
+    /**
+     * PATCH/DELETE تُرجع نجاحاً حتى لو لم تطابق أي صف (مثلاً رفضتها سياسة RLS بصمت)، لذلك نطلب الصفوف المتأثرة
+     * ونعدّها خطأً إن كانت صفراً. POST يكتفي بالنجاح.
+     */
     private suspend fun write(method: String, path: String, body: JSONObject?) = withContext(Dispatchers.IO) {
-        val r = rest.call(method, path, body?.toString(), bearer = token(), prefer = "return=minimal")
+        val verify = method == "PATCH" || method == "DELETE"
+        val r = rest.call(method, path, body?.toString(), bearer = token(), prefer = if (verify) "return=representation" else "return=minimal")
         if (!r.ok) throw IOException("HTTP ${r.code}")
+        if (verify && !AdminRules.affectedRows(r.body)) throw IOException("لم يتأثر أي صف (لا صلاحية أو الصف تغيّر)")
     }
 
     // ---- الأخبار
@@ -201,29 +218,47 @@ class AdminRepository(
         write("POST", "news", row)
     }
 
-    /** يصغّر الصورة ويرفعها JPEG (تُحذف بيانات الموقع). يُرجع الرابط العام. */
+    /**
+     * يرفع أي صورة يستطيع الهاتف قراءتها (PNG/JPEG/WebP/HEIC/...) بأي حجم:
+     * GIF يُرفع كما هو (لتبقى الحركة)، والباقي يُصغَّر إلى 2560 بكسل كحد أقصى ويُرمَّز JPEG (تُحذف بيانات الموقع).
+     * يُرجع الرابط العام.
+     */
     suspend fun uploadImage(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
-        val jpeg = ImagePrep.toJpeg(context, uri) ?: throw IllegalArgumentException("bad image")
-        val path = AdminRules.mediaPath(java.time.LocalDate.now().toString().take(7).replace("-", ""), Nonce.random().take(32), "jpg")
+        val resolver = context.contentResolver
+        val ym = java.time.LocalDate.now().toString().take(7).replace("-", "")
+        val mime = resolver.getType(uri)
+        if (mime == "image/gif") {
+            val size = querySize(context, uri)
+            require(size in 1..AdminRules.MAX_VIDEO_BYTES) { "gif size" }
+            val path = AdminRules.mediaPath(ym, Nonce.random().take(32), "gif")
+            upload(path, "image/gif", size) { out ->
+                (resolver.openInputStream(uri) ?: throw IOException("cannot open image")).use { it.copyTo(out, 64 * 1024) }
+            }
+            return@withContext AdminRules.publicMediaUrl(supabaseUrl, path)
+        }
+        val jpeg = NewsImagePrep.toJpeg(context, uri) ?: throw IllegalArgumentException("bad image")
+        val path = AdminRules.mediaPath(ym, Nonce.random().take(32), "jpg")
         upload(path, "image/jpeg", jpeg.size.toLong()) { it.write(jpeg) }
         AdminRules.publicMediaUrl(supabaseUrl, path)
     }
 
-    /** يرفع فيديو MP4 (حتى 50MB) بالبث دون تحميله كله في الذاكرة. */
+    /** يرفع فيديو (MP4/WebM/3GP/MOV/MKV) حتى 50MB بالبث دون تحميله كله في الذاكرة. */
     suspend fun uploadVideo(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
-        require(AdminRules.isMp4(resolver.getType(uri))) { "mp4 only" }
-        val size = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
-        } ?: -1L
+        val ext = AdminRules.videoExt(resolver.getType(uri)) ?: throw IllegalArgumentException("video type")
+        val size = querySize(context, uri)
         require(size in 1..AdminRules.MAX_VIDEO_BYTES) { "video size" }
-        val path = AdminRules.mediaPath(java.time.LocalDate.now().toString().take(7).replace("-", ""), Nonce.random().take(32), "mp4")
-        upload(path, "video/mp4", size) { out ->
-            val input = resolver.openInputStream(uri) ?: throw IOException("cannot open video")
-            input.use { it.copyTo(out, 64 * 1024) }
+        val path = AdminRules.mediaPath(java.time.LocalDate.now().toString().take(7).replace("-", ""), Nonce.random().take(32), ext)
+        upload(path, AdminRules.contentTypeFor(ext)!!, size) { out ->
+            (resolver.openInputStream(uri) ?: throw IOException("cannot open video")).use { it.copyTo(out, 64 * 1024) }
         }
         AdminRules.publicMediaUrl(supabaseUrl, path)
     }
+
+    private fun querySize(context: Context, uri: Uri): Long =
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
+        } ?: -1L
 
     private suspend fun upload(path: String, contentType: String, length: Long, writer: (java.io.OutputStream) -> Unit) {
         val bearer = token()

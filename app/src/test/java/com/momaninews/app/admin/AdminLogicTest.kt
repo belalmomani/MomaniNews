@@ -126,14 +126,41 @@ class AdminLogicTest {
         }
     }
 
-    @Test fun mp4Only_andPublicUrl() {
-        assertTrue(AdminRules.isMp4("video/mp4"))
-        assertFalse(AdminRules.isMp4("video/quicktime"))
-        assertFalse(AdminRules.isMp4(null))
+    @Test fun mimeToExt_coversCommonFormats() {
+        assertEquals("mp4", AdminRules.videoExt("video/mp4"))
+        assertEquals("webm", AdminRules.videoExt("video/webm"))
+        assertEquals("mov", AdminRules.videoExt("video/quicktime"))
+        assertEquals("3gp", AdminRules.videoExt("video/3gpp"))
+        assertEquals("mkv", AdminRules.videoExt("video/x-matroska"))
+        assertNull(AdminRules.videoExt("application/pdf"))
+        assertNull(AdminRules.videoExt(null))
+        assertEquals("png", AdminRules.imageExt("image/png"))
+        assertEquals("gif", AdminRules.imageExt("image/gif"))
+        assertNull(AdminRules.imageExt("text/html"))
+        assertEquals("video/webm", AdminRules.contentTypeFor("webm"))
+        assertEquals("image/jpeg", AdminRules.contentTypeFor("jpg"))
+        assertNull(AdminRules.contentTypeFor("exe"))
+    }
+
+    @Test fun publicMediaUrl_isBuiltFromBase() {
         assertEquals(
             "https://p.supabase.co/storage/v1/object/public/news-media/202610/a.jpg",
             AdminRules.publicMediaUrl("https://p.supabase.co/", "202610/a.jpg")
         )
+    }
+
+    @Test fun affectedRows_detectsEmptyResult() {
+        assertTrue(AdminRules.affectedRows("""[{"id":1}]"""))
+        assertFalse(AdminRules.affectedRows("[]"))
+        assertFalse(AdminRules.affectedRows(""))
+        assertFalse(AdminRules.affectedRows("not json"))
+    }
+
+    @Test fun imageSampleSize_downscalesLargeOnly() {
+        assertEquals(1, com.momaninews.app.data.admin.NewsImagePrep.sampleSize(1920, 1080))
+        assertEquals(1, com.momaninews.app.data.admin.NewsImagePrep.sampleSize(2560, 2560))
+        assertEquals(2, com.momaninews.app.data.admin.NewsImagePrep.sampleSize(5120, 3000))
+        assertEquals(4, com.momaninews.app.data.admin.NewsImagePrep.sampleSize(12000, 9000))
     }
 
     @Test fun newsParser_keepsOnlyHttpsMedia() {

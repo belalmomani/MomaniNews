@@ -294,6 +294,9 @@ begin
   perform t.chk('media: الأدمن يرفع', t.dml(uc, au, 'insert into storage.objects (bucket_id,name) values (''news-media'', ''202610/a.jpg'')'), '1');
   perform t.chk('media: الزائر يقرأ ملفات الأخبار فقط', t.sel(null, anon, 'select count(*) from storage.objects'), '1');
   perform t.chk('media: المستخدم العادي لا يحذف', t.dml(ua, au, 'delete from storage.objects where bucket_id=''news-media'''), '0');
+  perform t.chk('media: PNG مسموح', t.sel(null, su, 'select (''image/png'' = any(allowed_mime_types))::text from storage.buckets where id=''news-media'''), 'true');
+  perform t.chk('media: WEBM مسموح', t.sel(null, su, 'select (''video/webm'' = any(allowed_mime_types))::text from storage.buckets where id=''news-media'''), 'true');
+  perform t.chk('media: exe غير مسموح', t.sel(null, su, 'select (''application/x-msdownload'' = any(allowed_mime_types))::text from storage.buckets where id=''news-media'''), 'false');
   perform t.chk('media: الأدمن يحذف', t.dml(uc, au, 'delete from storage.objects where bucket_id=''news-media'''), '1');
   perform t.chk('media: video_url http مرفوض', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''http://x.y/v.mp4'')'), 'ERR:23514');
   perform t.chk('media: video_url https مقبول', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''https://x.y/v.mp4'')'), '1');

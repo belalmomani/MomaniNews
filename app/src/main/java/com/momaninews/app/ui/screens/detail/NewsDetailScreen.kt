@@ -156,17 +156,18 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
 
             news.videoUrl?.let { video ->
                 val context = androidx.compose.ui.platform.LocalContext.current
+                com.momaninews.app.ui.components.NewsVideoPlayer(video)
                 androidx.compose.material3.OutlinedButton(
                     onClick = {
                         runCatching {
                             context.startActivity(
                                 android.content.Intent(android.content.Intent.ACTION_VIEW)
-                                    .setDataAndType(android.net.Uri.parse(video), "video/mp4")
+                                    .setData(android.net.Uri.parse(video))
                                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         }
                     }
-                ) { Text("تشغيل الفيديو") }
+                ) { Text("فتح الفيديو في مشغّل آخر") }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)

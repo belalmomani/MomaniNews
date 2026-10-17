@@ -39,6 +39,13 @@ fun NewsCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 RegionTag(name = news.region.nameAr)
+                if (news.videoUrl != null) {
+                    Text(
+                        text = "▶ يحتوي فيديو",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 Text(
                     text = news.title,

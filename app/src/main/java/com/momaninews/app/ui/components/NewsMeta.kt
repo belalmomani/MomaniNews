@@ -94,3 +94,22 @@ fun NewsImage(news: com.momaninews.app.data.model.NewsItem, modifier: Modifier =
         else -> Unit
     }
 }
+
+/** مشغّل فيديو مضمّن (VideoView المدمج في أندرويد؛ بلا مكتبات إضافية). يبث الرابط https مع أزرار تحكم. */
+@Composable
+fun NewsVideoPlayer(url: String, modifier: Modifier = Modifier) {
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            android.widget.VideoView(ctx).apply {
+                val controller = android.widget.MediaController(ctx)
+                controller.setAnchorView(this)
+                setMediaController(controller)
+                setVideoURI(android.net.Uri.parse(url))
+                setOnPreparedListener { seekTo(1) } // يعرض الإطار الأول كصورة مصغّرة
+            }
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+    )
+}

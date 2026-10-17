@@ -220,9 +220,9 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: IllegalArgumentException) {
-                            message = "الملف غير مقبول: الصورة JPEG/PNG، والفيديو MP4 وبحجم أقل من 50MB."
+                            message = "الملف غير مقبول: تعذرت قراءة الصورة، أو الفيديو ليس MP4/WebM/3GP/MOV/MKV، أو حجمه أكبر من 50MB (سقف الخطة المجانية)."
                         } catch (e: Exception) {
-                            message = "تعذر الحفظ أو الرفع. تحقق من الاتصال والصلاحية."
+                            message = "تعذر الحفظ أو الرفع: " + (e.message ?: "خطأ غير معروف")
                         } finally {
                             busy = false
                         }

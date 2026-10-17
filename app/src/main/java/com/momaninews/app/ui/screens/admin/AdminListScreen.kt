@@ -94,7 +94,7 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
             } catch (e: IllegalArgumentException) {
                 message = "قيمة غير صالحة."
             } catch (e: Exception) {
-                message = "تعذر التنفيذ. تحقق من الاتصال والصلاحية."
+                message = "تعذر التنفيذ: " + (e.message ?: "خطأ غير معروف")
             } finally {
                 busy = false
             }
