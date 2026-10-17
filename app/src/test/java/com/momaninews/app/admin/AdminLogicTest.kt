@@ -112,4 +112,43 @@ class AdminLogicTest {
         assertFalse(p("user", false))
         assertFalse(SupabaseAuthParser.parseProfile("""[{"id":"u","display_name":"n"}]""")!!.isAdmin)
     }
+
+    @Test fun mediaPath_validatesParts() {
+        assertEquals("202610/abcdefgh12345678.jpg", AdminRules.mediaPath("202610", "abcdefgh12345678", "jpg"))
+        assertEquals("202610/abcdefgh12345678.mp4", AdminRules.mediaPath("202610", "abcdefgh12345678", "mp4"))
+        for ((ym, r, e) in listOf(
+            Triple("2026-10", "abcdefgh12345678", "jpg"),
+            Triple("202610", "../../evil1234", "jpg"),
+            Triple("202610", "abcdefgh12345678", "exe"),
+            Triple("202610", "short", "jpg")
+        )) {
+            try { AdminRules.mediaPath(ym, r, e); throw AssertionError("accepted $ym $r $e") } catch (x: IllegalArgumentException) { }
+        }
+    }
+
+    @Test fun mp4Only_andPublicUrl() {
+        assertTrue(AdminRules.isMp4("video/mp4"))
+        assertFalse(AdminRules.isMp4("video/quicktime"))
+        assertFalse(AdminRules.isMp4(null))
+        assertEquals(
+            "https://p.supabase.co/storage/v1/object/public/news-media/202610/a.jpg",
+            AdminRules.publicMediaUrl("https://p.supabase.co/", "202610/a.jpg")
+        )
+    }
+
+    @Test fun newsParser_keepsOnlyHttpsMedia() {
+        val items = com.momaninews.app.data.remote.SupabaseNewsParser.parseList(
+            """[{"id":1,"title":"ت","excerpt":null,"content":"ن","source_name":null,"published_at":null,
+                 "image_url":"https://x.y/a.jpg","video_url":"javascript:alert(1)","regions":{"id":"abeen","name_ar":"عبين"}},
+                {"id":2,"title":"ت","excerpt":null,"content":"ن","source_name":null,"published_at":null,
+                 "image_url":null,"video_url":"https://x.y/v.mp4","regions":{"id":"abeen","name_ar":"عبين"}},
+                {"id":3,"title":"ت","excerpt":null,"content":"ن","source_name":null,"published_at":null,
+                 "regions":{"id":"abeen","name_ar":"عبين"}}]"""
+        )
+        assertEquals("https://x.y/a.jpg", items[0].imageUrl)
+        assertNull(items[0].videoUrl)
+        assertNull(items[1].imageUrl)
+        assertEquals("https://x.y/v.mp4", items[1].videoUrl)
+        assertNull(items[2].imageUrl); assertNull(items[2].videoUrl)
+    }
 }

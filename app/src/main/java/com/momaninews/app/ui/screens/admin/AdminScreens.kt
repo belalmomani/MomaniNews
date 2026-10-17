@@ -1,6 +1,8 @@
 package com.momaninews.app.ui.screens.admin
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -167,7 +169,12 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
     var publish by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var videoUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { if (it != null) imageUri = it }
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { if (it != null) videoUri = it }
 
     ScreenScaffold(title = "إضافة خبر", onBack = onBack) { p ->
         Column(
@@ -184,6 +191,14 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
                     FilterChip(selected = region == id, onClick = { region = id }, label = { Text(name) })
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { pickImage.launch("image/*") }, enabled = !busy) { Text(if (imageUri == null) "إضافة صورة" else "تغيير الصورة") }
+                if (imageUri != null) OutlinedButton(onClick = { imageUri = null }, enabled = !busy) { Text("إزالة") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { pickVideo.launch("video/*") }, enabled = !busy) { Text(if (videoUri == null) "إضافة فيديو (MP4، حتى 50MB)" else "تغيير الفيديو") }
+                if (videoUri != null) OutlinedButton(onClick = { videoUri = null }, enabled = !busy) { Text("إزالة") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = publish, onCheckedChange = { publish = it })
                 Text("نشر فوراً (وإلا يُحفظ بانتظار الاعتماد)", color = MaterialTheme.colorScheme.onBackground)
@@ -195,13 +210,19 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
                     busy = true; message = null
                     scope.launch {
                         try {
-                            r.addNews(title, excerpt, content, source, region, publish)
+                            message = if (imageUri != null || videoUri != null) "جارٍ رفع الملفات…" else null
+                            val img = imageUri?.let { r.uploadImage(context, it) }
+                            val vid = videoUri?.let { r.uploadVideo(context, it) }
+                            r.addNews(title, excerpt, content, source, region, publish, img, vid)
                             title = ""; excerpt = ""; content = ""; source = ""; publish = false
+                            imageUri = null; videoUri = null
                             message = "تم الحفظ."
                         } catch (e: CancellationException) {
                             throw e
+                        } catch (e: IllegalArgumentException) {
+                            message = "الملف غير مقبول: الصورة JPEG/PNG، والفيديو MP4 وبحجم أقل من 50MB."
                         } catch (e: Exception) {
-                            message = "تعذر الحفظ. تحقق من الاتصال والصلاحية."
+                            message = "تعذر الحفظ أو الرفع. تحقق من الاتصال والصلاحية."
                         } finally {
                             busy = false
                         }

@@ -288,6 +288,16 @@ begin
   perform t.chk('cascade: verification', t.sel(null, su, format('select count(*) from public.verification_requests where user_id=%L', ua)), '0');
   perform t.chk('cascade: الإعلانات تبقى بلا مالك', t.sel(null, su, 'select count(*) from public.advertisements where user_id is null and title like ''إعلان%'''), '5');
 
+  -- ---------- وسائط الأخبار ----------
+  perform t.chk('media: المستخدم العادي لا يرفع', t.dml(ua, au, 'insert into storage.objects (bucket_id,name) values (''news-media'', ''202610/a.jpg'')'), 'ERR:42501');
+  perform t.chk('media: الزائر لا يرفع', t.dml(null, anon, 'insert into storage.objects (bucket_id,name) values (''news-media'', ''202610/a.jpg'')'), 'ERR:42501');
+  perform t.chk('media: الأدمن يرفع', t.dml(uc, au, 'insert into storage.objects (bucket_id,name) values (''news-media'', ''202610/a.jpg'')'), '1');
+  perform t.chk('media: الزائر يقرأ ملفات الأخبار فقط', t.sel(null, anon, 'select count(*) from storage.objects'), '1');
+  perform t.chk('media: المستخدم العادي لا يحذف', t.dml(ua, au, 'delete from storage.objects where bucket_id=''news-media'''), '0');
+  perform t.chk('media: الأدمن يحذف', t.dml(uc, au, 'delete from storage.objects where bucket_id=''news-media'''), '1');
+  perform t.chk('media: video_url http مرفوض', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''http://x.y/v.mp4'')'), 'ERR:23514');
+  perform t.chk('media: video_url https مقبول', t.dml(null, sr, 'insert into public.news (title,content,region_id,video_url) values (''ف'',''ن'',''abeen'',''https://x.y/v.mp4'')'), '1');
+
   -- ---------- حذف الحساب الذاتي ----------
   perform t.chk('delete_my_account: الزائر مرفوض', t.sel(null, anon, 'select public.delete_my_account()'), 'ERR:42501');
   perform t.chk('delete_my_account: الأدمن الوحيد مرفوض', t.sel(uc, au, 'select public.delete_my_account()'), 'ERR:P0001');

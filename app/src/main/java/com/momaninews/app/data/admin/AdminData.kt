@@ -1,6 +1,11 @@
 package com.momaninews.app.data.admin
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.momaninews.app.BuildConfig
+import com.momaninews.app.data.auth.Nonce
+import com.momaninews.app.data.verification.ImagePrep
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.auth.SupabaseAuthRepository
 import com.momaninews.app.data.remote.SupabaseNewsParser
@@ -40,6 +45,20 @@ object AdminRules {
         val base = if (currentEnd != null && currentEnd.isAfter(now)) currentEnd else now
         return base.plusSeconds(days * 86_400L).toString()
     }
+
+    const val MAX_VIDEO_BYTES = 50L * 1024 * 1024 // حد الحاوية في القاعدة (الخطة المجانية)
+
+    /** يُقبل MP4 فقط (نفس الأنواع المسموحة في الحاوية). */
+    fun isMp4(mime: String?): Boolean = mime == "video/mp4"
+
+    /** مسار ملف وسائط: شهر/اسم عشوائي.امتداد. [random] مُمرَّر للاختبار. */
+    fun mediaPath(yearMonth: String, random: String, ext: String): String {
+        require(yearMonth.matches(Regex("[0-9]{6}")) && random.matches(Regex("[A-Za-z0-9_-]{8,64}")) && ext in listOf("jpg", "mp4"))
+        return "$yearMonth/$random.$ext"
+    }
+
+    fun publicMediaUrl(base: String, path: String): String =
+        base.trimEnd('/') + "/storage/v1/object/public/news-media/" + path
 
     fun cleanText(text: String, max: Int): String = text.trim().take(max)
 
@@ -169,7 +188,7 @@ class AdminRepository(
     }
     suspend fun deleteNews(ref: String) = write("DELETE", "news?id=eq.${AdminRules.safeId(ref)}", null)
 
-    suspend fun addNews(title: String, excerpt: String, content: String, source: String, regionId: String, publish: Boolean) {
+    suspend fun addNews(title: String, excerpt: String, content: String, source: String, regionId: String, publish: Boolean, imageUrl: String? = null, videoUrl: String? = null) {
         require(ADMIN_REGIONS.any { it.first == regionId })
         val t = AdminRules.cleanText(title, 300); val c = content.trim()
         require(t.isNotEmpty() && c.isNotEmpty())
@@ -177,7 +196,54 @@ class AdminRepository(
             .put("status", if (publish) "approved" else "pending")
         AdminRules.cleanText(excerpt, 600).takeIf { it.isNotEmpty() }?.let { row.put("excerpt", it) }
         AdminRules.cleanText(source, 120).takeIf { it.isNotEmpty() }?.let { row.put("source_name", it) }
+        imageUrl?.let { require(it.startsWith("https://")); row.put("image_url", it) }
+        videoUrl?.let { require(it.startsWith("https://")); row.put("video_url", it) }
         write("POST", "news", row)
+    }
+
+    /** يصغّر الصورة ويرفعها JPEG (تُحذف بيانات الموقع). يُرجع الرابط العام. */
+    suspend fun uploadImage(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
+        val jpeg = ImagePrep.toJpeg(context, uri) ?: throw IllegalArgumentException("bad image")
+        val path = AdminRules.mediaPath(java.time.LocalDate.now().toString().take(7).replace("-", ""), Nonce.random().take(32), "jpg")
+        upload(path, "image/jpeg", jpeg.size.toLong()) { it.write(jpeg) }
+        AdminRules.publicMediaUrl(supabaseUrl, path)
+    }
+
+    /** يرفع فيديو MP4 (حتى 50MB) بالبث دون تحميله كله في الذاكرة. */
+    suspend fun uploadVideo(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        require(AdminRules.isMp4(resolver.getType(uri))) { "mp4 only" }
+        val size = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
+        } ?: -1L
+        require(size in 1..AdminRules.MAX_VIDEO_BYTES) { "video size" }
+        val path = AdminRules.mediaPath(java.time.LocalDate.now().toString().take(7).replace("-", ""), Nonce.random().take(32), "mp4")
+        upload(path, "video/mp4", size) { out ->
+            val input = resolver.openInputStream(uri) ?: throw IOException("cannot open video")
+            input.use { it.copyTo(out, 64 * 1024) }
+        }
+        AdminRules.publicMediaUrl(supabaseUrl, path)
+    }
+
+    private suspend fun upload(path: String, contentType: String, length: Long, writer: (java.io.OutputStream) -> Unit) {
+        val bearer = token()
+        val c = URL(supabaseUrl.trimEnd('/') + "/storage/v1/object/news-media/" + path).openConnection() as HttpURLConnection
+        try {
+            c.requestMethod = "POST"
+            c.connectTimeout = 10_000
+            c.readTimeout = 120_000
+            c.instanceFollowRedirects = false
+            c.doOutput = true
+            c.setFixedLengthStreamingMode(length)
+            c.setRequestProperty("apikey", publicKey)
+            c.setRequestProperty("Authorization", "Bearer $bearer")
+            c.setRequestProperty("Content-Type", contentType)
+            c.setRequestProperty("x-upsert", "false")
+            c.outputStream.use { writer(it) }
+            if (c.responseCode !in 200..299) throw IOException("HTTP ${c.responseCode}")
+        } finally {
+            c.disconnect()
+        }
     }
 
     // ---- التعليقات

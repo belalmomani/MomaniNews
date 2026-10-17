@@ -35,7 +35,7 @@ import com.momaninews.app.ui.components.DemoBanner
 import com.momaninews.app.ui.components.ErrorState
 import com.momaninews.app.ui.components.LoadingState
 import com.momaninews.app.ui.components.MessageState
-import com.momaninews.app.ui.components.NewsImagePlaceholder
+import com.momaninews.app.ui.components.NewsImage
 import com.momaninews.app.ui.components.RegionTag
 import com.momaninews.app.ui.components.SourceDateRow
 import kotlinx.coroutines.CancellationException
@@ -134,7 +134,7 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        NewsImagePlaceholder()
+        NewsImage(news)
 
         Column(
             modifier = Modifier.padding(16.dp),
@@ -153,6 +153,21 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
             )
 
             SourceDateRow(source = news.source, dateLabel = news.dateLabel)
+
+            news.videoUrl?.let { video ->
+                val context = androidx.compose.ui.platform.LocalContext.current
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW)
+                                    .setDataAndType(android.net.Uri.parse(video), "video/mp4")
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                ) { Text("تشغيل الفيديو") }
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 

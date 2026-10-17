@@ -113,15 +113,16 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
             message?.let {
                 Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary)
             }
+            val shown = list // نسخة ثابتة: القائمة الأصلية تصير null أثناء إعادة التحميل ويُقرأ المحتوى لاحقاً
             when {
                 failed -> MessageState("تعذر التحميل", "تحقق من الاتصال، ومن أن حسابك مدير.")
-                list == null -> Text("جارٍ التحميل…", modifier = Modifier.padding(16.dp))
-                list!!.isEmpty() -> MessageState(tab.emptyText, "")
+                shown == null -> Text("جارٍ التحميل…", modifier = Modifier.padding(16.dp))
+                shown.isEmpty() -> MessageState(tab.emptyText, "")
                 else -> LazyColumn(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(list!!, key = { it.ref }) { item ->
+                    items(shown, key = { it.ref }) { item ->
                         AdminCard(item, tab.actionsFor(item), busy) { action ->
                             val p = PendingAction(item, action)
                             if (action.confirm != null || action.prompt != null) {

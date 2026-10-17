@@ -23,5 +23,9 @@ data class NewsItem(
     val source: String,
     val dateLabel: String,
     val region: Region,
-    val isSample: Boolean = false
+    val isSample: Boolean = false,
+    /** رابط https لصورة الخبر (اختياري). */
+    val imageUrl: String? = null,
+    /** رابط https لفيديو MP4 (اختياري). */
+    val videoUrl: String? = null
 )

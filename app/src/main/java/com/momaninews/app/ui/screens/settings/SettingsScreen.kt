@@ -17,6 +17,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.momaninews.app.BuildConfig
 import com.momaninews.app.data.auth.AuthRepositories
+import com.momaninews.app.data.notifications.PushPrefs
 import com.momaninews.app.data.settings.SettingsStore
 import com.momaninews.app.data.settings.TextScales
 import com.momaninews.app.data.settings.ThemeMode
@@ -78,6 +80,17 @@ fun SettingsScreen(onBack: () -> Unit) {
                     OptionRow(label = TextScales.label(scale), selected = settings.textScale == scale) { SettingsStore.setTextScale(scale) }
                 }
             }
+            HorizontalDivider()
+            var pushOn by remember { mutableStateOf(PushPrefs.isEnabled(context)) }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("إشعارات الأخبار على الهاتف", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground)
+                Switch(checked = pushOn, onCheckedChange = { pushOn = it; PushPrefs.setEnabled(context, it) })
+            }
+            Text(
+                "تصلك الإشعارات بعد تسجيل الدخول، وقد تتأخر حتى ربع ساعة أو أكثر.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             HorizontalDivider()
             if (BuildConfig.PRIVACY_URL.startsWith("https://")) {
                 OutlinedButton(

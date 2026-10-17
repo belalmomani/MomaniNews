@@ -32,7 +32,7 @@ fun NewsCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column {
-            NewsImagePlaceholder()
+            NewsImage(news)
 
             Column(
                 modifier = Modifier.padding(16.dp),

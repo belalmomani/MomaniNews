@@ -3,6 +3,8 @@
 
     <!-- اتصال الشبكة لجلب الأخبار من واجهة API. HTTPS فقط (usesCleartextTraffic=false). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- إظهار إشعارات الأخبار على الهاتف (أندرويد 13+ يطلبها وقت التشغيل) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".MomaniNewsApp"

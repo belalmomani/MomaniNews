@@ -75,3 +75,22 @@ fun SourceDateRow(source: String, dateLabel: String, modifier: Modifier = Modifi
         )
     }
 }
+
+/** صورة الخبر: الحقيقية إن وُجدت، أو مكان تجريبي لأخبار العرض التجريبي فقط، وإلا لا شيء. */
+@Composable
+fun NewsImage(news: com.momaninews.app.data.model.NewsItem, modifier: Modifier = Modifier) {
+    val url = news.imageUrl
+    when {
+        url != null -> coil.compose.AsyncImage(
+            model = url,
+            contentDescription = news.title,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+        )
+        news.isSample -> NewsImagePlaceholder(modifier)
+        else -> Unit
+    }
+}

@@ -15,7 +15,7 @@ import org.json.JSONObject
  */
 object SupabaseNewsParser {
 
-    const val SELECT = "id,title,excerpt,content,source_name,published_at,regions(id,name_ar)"
+    const val SELECT = "id,title,excerpt,content,source_name,published_at,image_url,video_url,regions(id,name_ar)"
 
     fun parseList(json: String): List<NewsItem> {
         val array = JSONArray(json)
@@ -39,9 +39,14 @@ object SupabaseNewsParser {
             source = text(obj, "source_name"),
             dateLabel = formatDate(text(obj, "published_at")),
             region = Region(id = region.getString("id"), nameAr = region.getString("name_ar")),
-            isSample = false
+            isSample = false,
+            imageUrl = httpsOrNull(text(obj, "image_url")),
+            videoUrl = httpsOrNull(text(obj, "video_url"))
         )
     }
+
+    /** لا يُعرض إلا رابط https (حماية من روابط غير آمنة أو javascript:). */
+    fun httpsOrNull(url: String): String? = url.trim().takeIf { it.startsWith("https://") && it.length > 8 }
 
     private fun text(obj: JSONObject, key: String): String =
         if (obj.isNull(key)) "" else obj.optString(key, "")

@@ -119,6 +119,8 @@ dependencies {
     implementation(libs.androidx.credentials.play)
     implementation(libs.googleid)
     implementation(libs.startapp.inapp.sdk)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
