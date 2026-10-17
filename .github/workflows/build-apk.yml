@@ -33,11 +33,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run unit tests and build debug APK
-        env:
-          # اختياري: متغير مستودع (Settings > Secrets and variables > Actions > Variables) برابط API عبر https.
-          # إن لم يُعرَّف يُبنى التطبيق ببيانات تجريبية. الرابط عام وليس سراً.
-          ORG_GRADLE_PROJECT_apiBaseUrl: ${{ vars.API_BASE_URL }}
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+        run: ./gradlew testDebugUnitTest assembleDebug "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

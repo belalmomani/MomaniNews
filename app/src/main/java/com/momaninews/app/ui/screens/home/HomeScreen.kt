@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.momaninews.app.data.model.Regions
+import com.momaninews.app.ui.components.ActiveAdsSection
 import com.momaninews.app.ui.components.BannerAd
 import com.momaninews.app.ui.components.DemoBanner
 import com.momaninews.app.ui.components.EmptyState
@@ -126,6 +127,9 @@ fun HomeScreen(
                         ) {
                             item(key = "demo-banner") {
                                 DemoBanner()
+                            }
+                            item(key = "active-ads") {
+                                ActiveAdsSection()
                             }
                             items(visibleNews, key = { it.id }) { news ->
                                 NewsCard(

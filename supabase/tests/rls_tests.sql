@@ -288,6 +288,16 @@ begin
   perform t.chk('cascade: verification', t.sel(null, su, format('select count(*) from public.verification_requests where user_id=%L', ua)), '0');
   perform t.chk('cascade: الإعلانات تبقى بلا مالك', t.sel(null, su, 'select count(*) from public.advertisements where user_id is null and title like ''إعلان%'''), '5');
 
+  -- ---------- حذف الحساب الذاتي ----------
+  perform t.chk('delete_my_account: الزائر مرفوض', t.sel(null, anon, 'select public.delete_my_account()'), 'ERR:42501');
+  perform t.chk('delete_my_account: الأدمن الوحيد مرفوض', t.sel(uc, au, 'select public.delete_my_account()'), 'ERR:P0001');
+  perform t.chk('delete_my_account: الأدمن لا يزال موجوداً', t.sel(null, su, format('select count(*) from public.users where id=%L', uc)), '1');
+  perform t.chk('delete_my_account: مستخدم عادي ينجح', t.sel(ub, au, 'select public.delete_my_account()::text'), '');
+  perform t.chk('delete_my_account: حُذف من auth', t.sel(null, su, format('select count(*) from auth.users where id=%L', ub)), '0');
+  perform t.chk('delete_my_account: حُذف من users', t.sel(null, su, format('select count(*) from public.users where id=%L', ub)), '0');
+  perform t.chk('delete_my_account: المحظور يستطيع حذف حسابه', t.sel(ud, au, 'select public.delete_my_account()::text'), '');
+  perform t.chk('delete_my_account: الآخرون لم يتأثروا', t.sel(null, su, 'select count(*) from public.users'), '1');
+
   -- ---------- النتيجة ----------
   select count(*) into total from t.results;
   select string_agg(name || ' [فعلي=' || coalesce(actual, 'NULL') || ' متوقع=' || coalesce(expected, 'NULL') || ']', E'\n')

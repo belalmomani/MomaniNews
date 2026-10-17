@@ -21,6 +21,12 @@ interface AuthRepository {
     /** [context] يجب أن يكون Activity (يحتاجه Credential Manager لعرض نافذة Google). */
     suspend fun signIn(context: Context): User
     fun signOut()
+
+    /** يعيد قراءة بيانات المستخدم من الخادم (مثلاً بعد تغيّر حالة التوثيق). لا شيء في التجريبي. */
+    suspend fun refreshProfile() {}
+
+    /** يحذف الحساب وبياناته نهائياً من الخادم ثم يسجّل الخروج. يرمي استثناء عند الفشل (الجلسة تبقى). */
+    suspend fun deleteAccount() {}
 }
 
 /** دخول تجريبي محلي في الذاكرة فقط. لا يُخزَّن أي رمز أو بيانات، ولا يتصل بأي خادم. */
@@ -43,6 +49,10 @@ object DemoAuthRepository : AuthRepository {
     }
 
     override fun signOut() {
+        user.value = null
+    }
+
+    override suspend fun deleteAccount() {
         user.value = null
     }
 }

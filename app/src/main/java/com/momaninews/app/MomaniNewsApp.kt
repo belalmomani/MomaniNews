@@ -2,10 +2,12 @@ package com.momaninews.app
 
 import android.app.Application
 import com.momaninews.app.data.auth.AuthRepositories
+import com.momaninews.app.data.settings.SettingsStore
 
 class MomaniNewsApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        SettingsStore.init(this)
         AuthRepositories.init(this)
     }
 }

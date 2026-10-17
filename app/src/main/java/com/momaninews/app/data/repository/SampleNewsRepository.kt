@@ -2,7 +2,6 @@ package com.momaninews.app.data.repository
 
 import com.momaninews.app.BuildConfig
 import com.momaninews.app.data.model.NewsItem
-import com.momaninews.app.data.remote.ApiNewsRepository
 import com.momaninews.app.data.remote.SupabaseNewsRepository
 import com.momaninews.app.data.sample.SampleNews
 import kotlinx.coroutines.delay
@@ -25,14 +24,12 @@ object SampleNewsRepository : NewsRepository {
 
 /**
  * نقطة واحدة لاختيار التنفيذ المستخدم، بالأولوية:
- * 1) Supabase إذا ضُبط رابطه ومفتاحه العام، 2) واجهة PHP القديمة إذا ضُبط apiBaseUrl، 3) بيانات تجريبية.
+ * 1) Supabase إذا ضُبط رابطه ومفتاحه العام، 2) بيانات تجريبية.
  */
 object NewsRepositories {
     val default: NewsRepository = when {
         BuildConfig.SUPABASE_URL.startsWith("https://") && BuildConfig.SUPABASE_KEY.isNotBlank() ->
             SupabaseNewsRepository(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_KEY)
-        BuildConfig.API_BASE_URL.startsWith("https://") ->
-            ApiNewsRepository(BuildConfig.API_BASE_URL)
         else -> SampleNewsRepository
     }
 }

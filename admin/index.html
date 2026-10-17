@@ -53,6 +53,13 @@
       <button role="tab" data-tab="pending" aria-selected="true">أخبار بانتظار الاعتماد</button>
       <button role="tab" data-tab="all" aria-selected="false">كل الأخبار</button>
       <button role="tab" data-tab="add" aria-selected="false">إضافة خبر</button>
+      <button role="tab" data-tab="comments" aria-selected="false">التعليقات</button>
+      <button role="tab" data-tab="verif" aria-selected="false">طلبات التوثيق</button>
+      <button role="tab" data-tab="ads" aria-selected="false">الإعلانات</button>
+      <button role="tab" data-tab="users" aria-selected="false">المستخدمون</button>
+      <button role="tab" data-tab="notifs" aria-selected="false">الإشعارات</button>
+      <button role="tab" data-tab="sources" aria-selected="false">المصادر</button>
+      <button role="tab" data-tab="keywords" aria-selected="false">الكلمات المفتاحية</button>
     </nav>
     <div id="list"></div>
     <form id="addForm" class="hidden card" autocomplete="off">
@@ -177,7 +184,7 @@ async function setStatus(n, status, btn) {
     await ensureFresh();
     const updated = await http("PATCH", "/rest/v1/news?id=eq." + encodeURIComponent(n.id), { status }, { Prefer: "return=representation" });
     if (!updated || !updated.length) throw new Error("no rows");
-    note("تم.", "ok"); renderList();
+    note("تم.", "ok"); renderTab();
   } catch (e) { btn.disabled = false; note("تعذر التنفيذ (" + (e.status || e.message) + ").", "err"); }
 }
 
@@ -200,11 +207,265 @@ async function addNews(ev) {
   btn.disabled = false;
 }
 
+
+// ---- أدوات مشتركة
+function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+function btn(label, cls, fn) { const b = el("button", label, cls); b.onclick = () => fn(b); return b; }
+function inQuery(ids) { return "in.(" + ids.map((x) => encodeURIComponent(x)).join(",") + ")"; }
+async function namesFor(ids) {
+  const uniq = [...new Set(ids.filter(Boolean))]; const map = {};
+  if (!uniq.length) return map;
+  const rows = await http("GET", "/rest/v1/users?select=id,display_name,email&id=" + inQuery(uniq));
+  rows.forEach((u) => (map[u.id] = u.display_name + (u.email ? " (" + u.email + ")" : "")));
+  return map;
+}
+async function act(b, okText, fn) {
+  b.disabled = true;
+  try { await ensureFresh(); await fn(); note(okText, "ok"); await renderTab(); }
+  catch (e) {
+    b.disabled = false;
+    const msg = e.data && e.data.message ? " — " + e.data.message : "";
+    note("تعذر التنفيذ (" + (e.status || e.message) + ")" + msg, "err");
+  }
+}
+function emptyOr(box, rows, text) { box.textContent = ""; if (!rows.length) { box.textContent = text; return true; } return false; }
+
+// ---- التعليقات
+const CSTATUS = { visible: "ظاهر", hidden: "مخفي" };
+async function renderComments(box) {
+  const rows = await http("GET", "/rest/v1/comments?select=id,body,status,created_at,news_id,user_id&order=created_at.desc&limit=100");
+  const names = await namesFor(rows.map((r) => r.user_id));
+  if (emptyOr(box, rows, "لا توجد تعليقات.")) return;
+  rows.forEach((c) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("div", (names[c.user_id] || "—") + " • خبر #" + c.news_id + " • " + (CSTATUS[c.status] || c.status) + " • " + (c.created_at || "").slice(0, 16).replace("T", " "), "meta"));
+    card.appendChild(el("p", c.body));
+    const row = el("div", undefined, "row");
+    const to = c.status === "visible" ? "hidden" : "visible";
+    row.appendChild(btn(to === "hidden" ? "إخفاء" : "إظهار", "", (b) => act(b, "تم.", () => http("PATCH", "/rest/v1/comments?id=eq." + encodeURIComponent(c.id), { status: to }))));
+    row.appendChild(btn("حذف نهائي", "danger", (b) => confirm("حذف التعليق نهائياً؟") && act(b, "تم الحذف.", () => http("DELETE", "/rest/v1/comments?id=eq." + encodeURIComponent(c.id)))));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+// ---- طلبات التوثيق
+async function openDocument(path) {
+  // رابط موقّع قصير العمر (5 دقائق). الحاوية خاصة؛ الأدمن وحده يقرأ ملفات غيره (سياسة التخزين).
+  const w = window.open("about:blank", "_blank");
+  try {
+    await ensureFresh();
+    const r = await http("POST", "/storage/v1/object/sign/verification-docs/" + path.split("/").map(encodeURIComponent).join("/"), { expiresIn: 300 });
+    if (!r || !r.signedURL) throw new Error("no url");
+    if (w) { w.opener = null; w.location = CFG.url + "/storage/v1" + r.signedURL; }
+  } catch (e) { if (w) w.close(); note("تعذر فتح المستند (" + (e.status || e.message) + ").", "err"); }
+}
+async function renderVerif(box) {
+  const rows = await http("GET", "/rest/v1/verification_requests?select=id,user_id,full_name,document_path,status,created_at&status=eq.pending&order=created_at.asc&limit=100");
+  const names = await namesFor(rows.map((r) => r.user_id));
+  if (emptyOr(box, rows, "لا توجد طلبات توثيق معلّقة.")) return;
+  rows.forEach((v) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", v.full_name));
+    card.appendChild(el("div", (names[v.user_id] || "—") + " • " + (v.created_at || "").slice(0, 10), "meta"));
+    const row = el("div", undefined, "row");
+    row.appendChild(btn("عرض المستند", "", () => openDocument(v.document_path)));
+    row.appendChild(btn("توثيق", "primary", (b) => confirm("توثيق «" + v.full_name + "»؟") && act(b, "تم التوثيق.", () => http("PATCH", "/rest/v1/verification_requests?id=eq." + encodeURIComponent(v.id), { status: "approved" }))));
+    row.appendChild(btn("رفض", "danger", (b) => {
+      const reason = prompt("سبب الرفض (يظهر للمستخدم، حتى 500 حرف):"); if (reason === null) return;
+      act(b, "تم الرفض.", () => http("PATCH", "/rest/v1/verification_requests?id=eq." + encodeURIComponent(v.id), { status: "rejected", admin_note: reason.trim().slice(0, 500) }));
+    }));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+// ---- الإعلانات (طلبات معلّقة)
+async function renderAdsPending(box) {
+  box.appendChild(el("h2", "طلبات بانتظار الاعتماد"));
+  const rows = await http("GET", "/rest/v1/advertisements?select=id,user_id,title,body,link_url,contact,region_id,created_at&status=eq.pending&order=created_at.asc&limit=100");
+  const names = await namesFor(rows.map((r) => r.user_id));
+  if (!rows.length) { box.appendChild(el("p", "لا توجد طلبات إعلان معلّقة.")); return; }
+  rows.forEach((a) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", a.title));
+    card.appendChild(el("div", [(names[a.user_id] || "—"), a.region_id ? regionName(a.region_id) : "", a.contact || "", (a.created_at || "").slice(0, 10)].filter(Boolean).join(" • "), "meta"));
+    if (a.body) card.appendChild(el("p", a.body));
+    if (a.link_url && /^https:\/\//.test(a.link_url)) { const l = el("a", "الرابط: " + a.link_url); l.href = a.link_url; l.target = "_blank"; l.rel = "noopener noreferrer"; card.appendChild(l); }
+    const row = el("div", undefined, "row");
+    row.appendChild(btn("اعتماد", "primary", (b) => {
+      const d = prompt("مدة الإعلان بالأيام (1 - 365):", "7"); if (d === null) return;
+      const days = parseInt(d, 10); if (!(days >= 1 && days <= 365)) { note("مدة غير صالحة.", "err"); return; }
+      const start = new Date(), end = new Date(Date.now() + days * 86400000);
+      act(b, "تم اعتماد الإعلان.", () => http("PATCH", "/rest/v1/advertisements?id=eq." + encodeURIComponent(a.id), { status: "approved", starts_at: start.toISOString(), ends_at: end.toISOString() }));
+    }));
+    row.appendChild(btn("رفض", "danger", (b) => {
+      const reason = prompt("سبب الرفض (اختياري):"); if (reason === null) return;
+      act(b, "تم الرفض.", () => http("PATCH", "/rest/v1/advertisements?id=eq." + encodeURIComponent(a.id), { status: "rejected", admin_note: reason.trim().slice(0, 500) || null }));
+    }));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+async function renderAdsApproved(box) {
+  box.appendChild(el("h2", "الإعلانات المعتمدة"));
+  const rows = await http("GET", "/rest/v1/advertisements?select=id,title,starts_at,ends_at,region_id,link_url&status=eq.approved&order=ends_at.desc&limit=100");
+  if (!rows.length) { box.appendChild(el("p", "لا توجد إعلانات معتمدة.")); return; }
+  const now = Date.now();
+  rows.forEach((a) => {
+    const active = new Date(a.starts_at).getTime() <= now && new Date(a.ends_at).getTime() > now;
+    const expired = new Date(a.ends_at).getTime() <= now;
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", a.title));
+    card.appendChild(el("div", [expired ? "منتهٍ" : active ? "فعّال" : "مجدول", (a.starts_at || "").slice(0, 10) + " ← " + (a.ends_at || "").slice(0, 10), a.region_id ? regionName(a.region_id) : ""].filter(Boolean).join(" • "), "meta"));
+    const row = el("div", undefined, "row");
+    row.appendChild(btn("تمديد", "", (b) => {
+      const d = prompt("عدد الأيام للتمديد (1 - 365):", "7"); if (d === null) return;
+      const days = parseInt(d, 10); if (!(days >= 1 && days <= 365)) { note("مدة غير صالحة.", "err"); return; }
+      const base = Math.max(Date.now(), new Date(a.ends_at).getTime());
+      act(b, "تم التمديد.", () => http("PATCH", "/rest/v1/advertisements?id=eq." + encodeURIComponent(a.id), { ends_at: new Date(base + days * 86400000).toISOString() }));
+    }));
+    if (!expired) row.appendChild(btn("إيقاف", "danger", (b) => confirm("إيقاف هذا الإعلان؟") && act(b, "تم الإيقاف.", () => http("PATCH", "/rest/v1/advertisements?id=eq." + encodeURIComponent(a.id), { status: "rejected", admin_note: "أوقفه المدير" }))));
+    row.appendChild(btn("حذف", "danger", (b) => confirm("حذف الإعلان نهائياً؟") && act(b, "تم الحذف.", () => http("DELETE", "/rest/v1/advertisements?id=eq." + encodeURIComponent(a.id)))));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+async function renderAds(box) {
+  box.textContent = "";
+  const a = el("div"), b = el("div");
+  box.appendChild(a); box.appendChild(b);
+  await renderAdsPending(a);
+  await renderAdsApproved(b);
+}
+
+// ---- المصادر
+async function renderSources(box) {
+  const rows = await http("GET", "/rest/v1/sources?select=id,name,url,kind,region_id,is_active&order=id.desc&limit=200");
+  box.textContent = "";
+  const form = el("form", undefined, "card"); form.autocomplete = "off";
+  form.appendChild(el("h3", "إضافة مصدر"));
+  const nm = el("input"); nm.maxLength = 120; nm.required = true; nm.placeholder = "اسم المصدر";
+  const url = el("input"); url.type = "url"; url.required = true; url.placeholder = "https://";
+  const kind = el("select"); [["manual", "يدوي"], ["rss", "RSS"], ["html", "HTML"]].forEach(([v, t]) => { const o = el("option", t); o.value = v; kind.appendChild(o); });
+  [nm, url, kind].forEach((x) => { x.style.marginBottom = "8px"; form.appendChild(x); });
+  const add = el("button", "إضافة", "primary"); add.type = "submit"; form.appendChild(add);
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (!/^https:\/\//.test(url.value.trim())) { note("الرابط يجب أن يبدأ بـ https://", "err"); return; }
+    act(add, "أُضيف المصدر.", () => http("POST", "/rest/v1/sources", { name: nm.value.trim(), url: url.value.trim(), kind: kind.value }, { Prefer: "return=minimal" }));
+  });
+  box.appendChild(form);
+  if (!rows.length) box.appendChild(el("p", "لا توجد مصادر."));
+  rows.forEach((x) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", x.name + (x.is_active ? "" : " (معطّل)")));
+    card.appendChild(el("div", x.kind + " • " + x.url, "meta"));
+    const row = el("div", undefined, "row");
+    row.appendChild(btn(x.is_active ? "تعطيل" : "تفعيل", "", (b) => act(b, "تم.", () => http("PATCH", "/rest/v1/sources?id=eq." + encodeURIComponent(x.id), { is_active: !x.is_active }))));
+    row.appendChild(btn("حذف", "danger", (b) => confirm("حذف المصدر؟ (الأخبار المرتبطة به تبقى)") && act(b, "تم الحذف.", () => http("DELETE", "/rest/v1/sources?id=eq." + encodeURIComponent(x.id)))));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+// ---- الكلمات المفتاحية
+async function renderKeywords(box) {
+  const rows = await http("GET", "/rest/v1/keywords?select=id,word,region_id,is_active&order=id.desc&limit=300");
+  box.textContent = "";
+  const form = el("form", undefined, "card"); form.autocomplete = "off";
+  form.appendChild(el("h3", "إضافة كلمة مفتاحية"));
+  const w = el("input"); w.maxLength = 80; w.required = true; w.placeholder = "الكلمة";
+  const reg = el("select"); const none = el("option", "كل المناطق"); none.value = ""; reg.appendChild(none);
+  regions.forEach((r) => { const o = el("option", r.name_ar); o.value = r.id; reg.appendChild(o); });
+  [w, reg].forEach((x) => { x.style.marginBottom = "8px"; form.appendChild(x); });
+  const add = el("button", "إضافة", "primary"); add.type = "submit"; form.appendChild(add);
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const row = { word: w.value.trim() }; if (reg.value) row.region_id = reg.value;
+    act(add, "أُضيفت الكلمة.", () => http("POST", "/rest/v1/keywords", row, { Prefer: "return=minimal" }));
+  });
+  box.appendChild(form);
+  if (!rows.length) box.appendChild(el("p", "لا توجد كلمات."));
+  rows.forEach((x) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", x.word + (x.is_active ? "" : " (معطّلة)")));
+    card.appendChild(el("div", x.region_id ? regionName(x.region_id) : "كل المناطق", "meta"));
+    const row = el("div", undefined, "row");
+    row.appendChild(btn(x.is_active ? "تعطيل" : "تفعيل", "", (b) => act(b, "تم.", () => http("PATCH", "/rest/v1/keywords?id=eq." + encodeURIComponent(x.id), { is_active: !x.is_active }))));
+    row.appendChild(btn("حذف", "danger", (b) => confirm("حذف الكلمة؟") && act(b, "تم الحذف.", () => http("DELETE", "/rest/v1/keywords?id=eq." + encodeURIComponent(x.id)))));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+// ---- المستخدمون
+async function renderUsers(box) {
+  const rows = await http("GET", "/rest/v1/users?select=id,display_name,email,role,verification,is_banned,created_at&order=created_at.desc&limit=100");
+  if (emptyOr(box, rows, "لا يوجد مستخدمون.")) return;
+  const VER = { none: "غير موثّق", pending: "قيد المراجعة", approved: "موثّق", rejected: "مرفوض" };
+  rows.forEach((u) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", u.display_name + (u.role === "admin" ? " (مدير)" : "") + (u.is_banned ? " — محظور" : "")));
+    card.appendChild(el("div", [u.email, VER[u.verification] || u.verification, (u.created_at || "").slice(0, 10)].filter(Boolean).join(" • "), "meta"));
+    const row = el("div", undefined, "row");
+    const call = (role, banned) => (b) => act(b, "تم.", () => http("POST", "/rest/v1/rpc/admin_set_user_flags", { p_user: u.id, p_role: role, p_banned: banned }));
+    row.appendChild(btn(u.is_banned ? "رفع الحظر" : "حظر", u.is_banned ? "" : "danger", (b) => confirm((u.is_banned ? "رفع الحظر عن " : "حظر ") + u.display_name + "؟") && call(u.role, !u.is_banned)(b)));
+    row.appendChild(btn(u.role === "admin" ? "إزالة صلاحية المدير" : "جعله مديراً", "", (b) => confirm("تغيير صلاحية " + u.display_name + "؟") && call(u.role === "admin" ? "user" : "admin", u.is_banned)(b)));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+
+// ---- الإشعارات (عامة لكل المستخدمين)
+async function renderNotifs(box) {
+  const rows = await http("GET", "/rest/v1/notifications?select=id,user_id,title,body,news_id,created_at&order=created_at.desc&limit=20");
+  box.textContent = "";
+  const form = el("form", undefined, "card"); form.autocomplete = "off";
+  form.appendChild(el("h3", "إرسال إشعار عام لكل المستخدمين"));
+  const t = el("input"); t.maxLength = 120; t.required = true; t.placeholder = "العنوان";
+  const b = el("textarea"); b.maxLength = 500; b.placeholder = "النص (اختياري)"; b.style.minHeight = "70px";
+  const n = el("input"); n.type = "number"; n.min = "1"; n.placeholder = "رقم خبر لفتحه عند الضغط (اختياري)";
+  [t, b, n].forEach((x) => { x.style.marginBottom = "8px"; form.appendChild(x); });
+  const send = el("button", "إرسال", "primary"); send.type = "submit"; form.appendChild(send);
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (!confirm("إرسال هذا الإشعار لكل المستخدمين؟")) return;
+    const row = { title: t.value.trim() };
+    if (b.value.trim()) row.body = b.value.trim();
+    if (n.value) row.news_id = parseInt(n.value, 10);
+    act(send, "أُرسل الإشعار.", () => http("POST", "/rest/v1/notifications", row, { Prefer: "return=minimal" }));
+  });
+  box.appendChild(form);
+  box.appendChild(el("h3", "آخر الإشعارات"));
+  if (!rows.length) box.appendChild(el("p", "لا توجد إشعارات."));
+  rows.forEach((x) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h3", x.title));
+    card.appendChild(el("div", (x.user_id ? "خاص" : "عام") + (x.news_id ? " • خبر #" + x.news_id : "") + " • " + (x.created_at || "").slice(0, 16).replace("T", " "), "meta"));
+    if (x.body) card.appendChild(el("p", x.body));
+    const row = el("div", undefined, "row");
+    row.appendChild(btn("حذف", "danger", (bb) => confirm("حذف الإشعار؟") && act(bb, "تم الحذف.", () => http("DELETE", "/rest/v1/notifications?id=eq." + encodeURIComponent(x.id)))));
+    card.appendChild(row); box.appendChild(card);
+  });
+}
+
+async function renderTab() {
+  const box = $("list"); box.textContent = "جارٍ التحميل…";
+  try {
+    await ensureFresh();
+    if (tab === "comments") await renderComments(box);
+    else if (tab === "verif") await renderVerif(box);
+    else if (tab === "ads") await renderAds(box);
+    else if (tab === "users") await renderUsers(box);
+    else if (tab === "sources") await renderSources(box);
+    else if (tab === "keywords") await renderKeywords(box);
+    else if (tab === "notifs") await renderNotifs(box);
+    else await renderList();
+  } catch (e) { box.textContent = ""; note("تعذر التحميل (" + (e.status || "شبكة") + ").", "err"); }
+}
+
 function setTab(t) {
   tab = t; note("");
   document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
   show("addForm", t === "add"); show("list", t !== "add");
-  if (t !== "add") renderList();
+  if (t !== "add") renderTab();
 }
 
 async function start() {

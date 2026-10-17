@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Keep only the page itself (no tests)
-        run: mkdir site && cp admin/index.html site/index.html
+        run: mkdir site && cp admin/index.html admin/privacy.html site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

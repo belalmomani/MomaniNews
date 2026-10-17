@@ -14,7 +14,7 @@ class NotSignedInException : Exception("not signed in")
 class InvalidCommentException : Exception("invalid comment")
 
 /**
- * قواعد التفاعل في مكان واحد. من يحق له التعليق والتصويت قرار مفتوح (انظر docs/API_CONTRACT.md)؛
+ * قواعد التفاعل في مكان واحد. من يحق له التعليق والتصويت قرار مفتوح (انظر docs/SUPABASE_SETUP.md)؛
  * الافتراض الحالي: أي مستخدم مسجّل. الخادم هو الذي سيفرض القاعدة الفعلية.
  */
 object InteractionRules {

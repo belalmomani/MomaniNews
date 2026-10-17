@@ -2,6 +2,7 @@ package com.momaninews.app.data.auth
 
 import android.content.Context
 import com.momaninews.app.data.model.User
+import com.momaninews.app.data.remote.SupabaseRest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,8 +20,8 @@ import kotlinx.coroutines.withContext
  */
 class SupabaseAuthRepository(
     appContext: Context,
-    supabaseUrl: String,
-    publicKey: String,
+    private val supabaseUrl: String,
+    private val publicKey: String,
     private val webClientId: String
 ) : AuthRepository {
 
@@ -52,6 +53,37 @@ class SupabaseAuthRepository(
                 profile
             }
         }
+    }
+
+    override suspend fun refreshProfile() {
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                val current = session ?: return@withLock
+                try {
+                    api.fetchProfile(current)?.let { user.value = it }
+                } catch (e: Exception) {
+                    // نُبقي البيانات الحالية عند فشل الشبكة.
+                }
+            }
+        }
+    }
+
+    /** (رمز وصول صالح، معرّف المستخدم) أو null إن لم يسجَّل الدخول. */
+    suspend fun tokenAndUserId(): Pair<String, String>? {
+        val token = accessToken() ?: return null
+        val id = session?.userId ?: return null
+        return token to id
+    }
+
+    class DeleteAccountException(val code: Int) : Exception("delete failed: $code")
+
+    override suspend fun deleteAccount() {
+        val token = accessToken() ?: throw DeleteAccountException(401)
+        val response = withContext(Dispatchers.IO) {
+            SupabaseRest(supabaseUrl, publicKey).call("POST", "rpc/delete_my_account", "{}", bearer = token)
+        }
+        if (!response.ok) throw DeleteAccountException(response.code)
+        signOut()
     }
 
     override fun signOut() {

@@ -16,14 +16,10 @@
 4. عند نجاح البناء افتح التشغيل ونزّل الملف من قسم **Artifacts** باسم `MomaniNews-debug-apk`، ثم فك الضغط لتحصل على `app-debug.apk`.
 5. انقل الملف إلى الهاتف وثبّته (يلزم السماح بالتثبيت من مصادر غير معروفة).
 
-## ربط التطبيق بالخادم (المرحلة 3)
+## ربط التطبيق بالخادم
 
-افتراضياً يعمل التطبيق ببيانات تجريبية. لتفعيل الاتصال بالـ API (HTTPS فقط، حسب `docs/API_CONTRACT.md`):
-
-- في GitHub: Settings > Secrets and variables > Actions > **Variables** > أضف `API_BASE_URL` بقيمة مثل `https://example.com/api/v1/`.
-- محلياً: `./gradlew assembleDebug -PapiBaseUrl=https://example.com/api/v1/`.
-
-قيمة غير https تُفشل البناء عمداً. لا تضع أسراراً أو كلمات مرور قاعدة بيانات في التطبيق أو في هذا المتغير.
+الخادم هو Supabase (الرابط والمفتاح العام مضبوطان في `app/build.gradle.kts` ويمكن تجاوزهما بـ `-PsupabaseUrl` و`-PsupabaseKey`). التفاصيل في `docs/SUPABASE_SETUP.md`.
+رابط سياسة الخصوصية (اختياري، https فقط) يُضبط بمتغير مستودع GitHub باسم `PRIVACY_URL` أو بـ `-PprivacyUrl=...`؛ إن تُرك فارغاً يُخفى الزر من الإعدادات.
 
 ## إعلانات Start.io
 
@@ -67,7 +63,7 @@ app/src/main/java/com/momaninews/app/
 
 ## الخادم
 
-تقرر استخدام **Supabase** بدل PHP/MySQL. مخطط القاعدة وسياساتها واختباراتها في `supabase/` والتعليمات في `docs/SUPABASE_SETUP.md`. مجلد `backend/` (PHP) صار **قديماً (legacy)** وسيُقترح حذفه عند دمج التطبيق مع Supabase.
+تقرر استخدام **Supabase** بدل PHP/MySQL. مخطط القاعدة وسياساتها واختباراتها في `supabase/` والتعليمات في `docs/SUPABASE_SETUP.md`. حُذف الباك إند القديم (PHP/MySQL) من المشروع.
 
 ### ربط التطبيق بـ Supabase (قراءة الأخبار)
 

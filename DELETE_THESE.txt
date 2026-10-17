@@ -1,0 +1,7 @@
+احذف هذه المسارات من مشروعك (الباك إند القديم PHP وملفاته):
+backend/                         (المجلد كله)
+docs/BACKEND_SETUP.md
+docs/API_CONTRACT.md
+app/src/main/java/com/momaninews/app/data/remote/ApiNewsRepository.kt
+app/src/main/java/com/momaninews/app/data/remote/NewsJsonParser.kt
+app/src/test/java/com/momaninews/app/data/remote/NewsJsonParserTest.kt

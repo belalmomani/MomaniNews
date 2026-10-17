@@ -4,18 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// رابط API يُمرَّر بـ -PapiBaseUrl=https://.../api/v1/ أو في gradle.properties المحلي.
-// الرابط عام وليس سراً. إن تُرك فارغاً يعمل التطبيق ببيانات تجريبية فقط. HTTPS إلزامي.
-val rawApiBaseUrl = (project.findProperty("apiBaseUrl") as String?)?.trim().orEmpty()
-val apiBaseUrl = if (Regex("""https://[^"\s\\]+""").matches(rawApiBaseUrl)) {
-    rawApiBaseUrl.trimEnd('/') + "/"
-} else {
-    ""
-}
-if (rawApiBaseUrl.isNotEmpty() && apiBaseUrl.isEmpty()) {
-    throw GradleException("apiBaseUrl must be a valid https:// URL")
-}
-
 // Supabase: الرابط والمفتاح العام (publishable/anon) عامّان بطبيعتهما ومصمَّمان للوجود داخل التطبيق؛
 // الحماية الفعلية في سياسات RLS. ممنوع وضع مفتاح service_role هنا إطلاقاً.
 // يمكن تجاوزهما بـ -PsupabaseUrl=... -PsupabaseKey=... (تُترك فارغة لتعطيل Supabase).
@@ -25,6 +13,11 @@ val supabaseUrl = prop("supabaseUrl", "https://jpnifyumqmkbgxcqnyqb.supabase.co"
 val supabaseKey = prop("supabaseKey", "sb_publishable_sVF84cWS-dNvYn72x1risQ_z1_ewOUp")
 // Web Client ID لتسجيل الدخول بـ Google (عام، ليس سراً؛ ممنوع وضع Client secret هنا). فارغ = الدخول التجريبي.
 val googleWebClientId = prop("googleWebClientId", "1010340161934-tq8qfngl6b8l4lt73rd8fddvblflv66a.apps.googleusercontent.com")
+// رابط سياسة الخصوصية (https فقط). فارغ = يُخفى الزر في الإعدادات. مثال: -PprivacyUrl=https://USER.github.io/REPO/privacy.html
+val privacyUrl = prop("privacyUrl", "")
+if (privacyUrl.isNotEmpty() && !Regex("""https://[^"\s\\]+""").matches(privacyUrl)) {
+    throw GradleException("privacyUrl must be a valid https:// URL")
+}
 if (!Regex("""([0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com)?""").matches(googleWebClientId)) {
     throw GradleException("googleWebClientId is not a valid Google client ID")
 }
@@ -46,18 +39,29 @@ android {
         applicationId = "com.momaninews.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // Google Play يشترط زيادة versionCode مع كل رفع؛ يمرّره workflow الإصدار (-PversionCode=رقم التشغيل).
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
         versionName = "0.1.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+        buildConfigField("String", "PRIVACY_URL", "\"$privacyUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     // مفتاح توقيع ثابت لنسخ debug (ليس سراً: مفتاح تطوير عام). بدونه يولّد كل تشغيل على GitHub
     // مفتاحاً جديداً فتتغير البصمة SHA-1 ويتعطل تسجيل الدخول بـ Google. للإصدار النهائي مفتاح منفصل لاحقاً.
+    // مفتاح الإصدار من متغيرات بيئة (GitHub Secrets). غير موجود = إصدار غير موقّع (لا يُنشر).
+    val releaseKeystorePath: String? = System.getenv("RELEASE_KEYSTORE_PATH")
     signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
@@ -68,6 +72,7 @@ android {
 
     buildTypes {
         release {
+            if (releaseKeystorePath != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
