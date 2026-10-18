@@ -96,7 +96,13 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                     AdminAction("حذف", danger = true, confirm = "حذف الكلمة؟") { i, _ -> r.deleteKeyword(i.ref) }
                 )
             },
-            AdminTab("حالة المصادر", "لا توجد مصادر", { r.sourceStatus() }) { emptyList() },
+            AdminTab("المصادر", "لا توجد مصادر", { listOf(AdminItem(ref = "add", title = "＋ إضافة مصدر RSS", meta = "الصيغة: الاسم | https://رابط-الخلاصة")) + r.sourceStatus() }) { s ->
+                if (s.ref == "add") listOf(AdminAction("إضافة", prompt = "الاسم | https://رابط-الخلاصة") { _, text -> r.addSource(text ?: "") })
+                else listOf(
+                    AdminAction(if (s.flag) "تعطيل" else "تفعيل") { i, _ -> r.setSourceActive(i.ref, !i.flag) },
+                    AdminAction("حذف", danger = true, confirm = "حذف المصدر؟ (الأخبار المرتبطة به تبقى)") { i, _ -> r.deleteSource(i.ref) }
+                )
+            },
             AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { listOf(
                 AdminAction("أرشفة", confirm = "أرشفة الخبر (يختفي من التطبيق)؟") { i, _ -> r.setNewsStatus(i.ref, "archived") },
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },

@@ -199,4 +199,12 @@ class AdminLogicTest {
         assertEquals("", AdminRules.adState(false, "", now))
         assertEquals("", AdminRules.adState(false, "garbage", now))
     }
+
+    @Test fun sourceInputParsing() {
+        assertEquals("موقع" to "https://a.example/feed", AdminRules.parseSourceInput("موقع | https://a.example/feed"))
+        assertNull(AdminRules.parseSourceInput("موقع | http://a.example/feed"))
+        assertNull(AdminRules.parseSourceInput("https://a.example/feed"))
+        assertNull(AdminRules.parseSourceInput(" | https://a.example/feed"))
+        assertNull(AdminRules.parseSourceInput("م | https://a.example/fe ed"))
+    }
 }

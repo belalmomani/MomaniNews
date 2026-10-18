@@ -41,6 +41,15 @@ object AdminRules {
         val end = runCatching { Instant.parse(endsAt) }.getOrNull() ?: return ""
         return if (end.isBefore(now)) "منتهٍ" else "ساري"
     }
+    /** «الاسم | رابط https» → (الاسم، الرابط)؛ null إن كان غير صالح. */
+    fun parseSourceInput(text: String): Pair<String, String>? {
+        val i = text.indexOf('|')
+        if (i < 0) return null
+        val name = text.substring(0, i).trim()
+        val url = text.substring(i + 1).trim()
+        if (name.isEmpty() || name.length > 120 || !url.startsWith("https://") || url.length < 12 || url.any { it.isWhitespace() }) return null
+        return name to url
+    }
     val KEYWORD_KINDS = listOf("region", "alias", "name", "context", "exclude")
     fun kindLabel(kind: String) = when (kind) {
         "region" -> "منطقة"; "alias" -> "اسم بديل"; "name" -> "اسم شخص"; "context" -> "سياق"; "exclude" -> "استبعاد"; else -> kind
@@ -300,7 +309,8 @@ class AdminRepository(
                 title = r.optString("name") + if (r.optBoolean("is_active", true)) "" else " (معطّل)",
                 meta = "${r.optString("kind")} • $st" + (if (r.isNull("last_success_at")) "" else " • آخر نجاح " + SupabaseNewsParser.formatDate(r.optString("last_success_at"))),
                 body = (if (r.isNull("last_error")) "" else "الخطأ: " + r.optString("last_error") + "\n") + r.optString("url"),
-                flag = !r.isNull("last_error")
+                flag = r.optBoolean("is_active", true),
+                extra = if (r.isNull("last_error")) "" else "err"
             )
         }
     }
@@ -328,6 +338,14 @@ class AdminRepository(
     suspend fun setKeywordActive(ref: String, active: Boolean) =
         write("PATCH", "keywords?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_active", active))
     suspend fun deleteKeyword(ref: String) = write("DELETE", "keywords?id=eq.${AdminRules.safeId(ref)}", null)
+    /** الإدخال: «الاسم | رابط https للخلاصة» */
+    suspend fun addSource(input: String) {
+        val p = AdminRules.parseSourceInput(input) ?: throw IOException("الصيغة: الاسم | https://رابط-الخلاصة")
+        write("POST", "sources", JSONObject().put("name", p.first).put("url", p.second).put("kind", "rss"))
+    }
+    suspend fun setSourceActive(ref: String, active: Boolean) =
+        write("PATCH", "sources?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_active", active))
+    suspend fun deleteSource(ref: String) = write("DELETE", "sources?id=eq.${AdminRules.safeId(ref)}", null)
     suspend fun deleteNews(ref: String) = write("DELETE", "news?id=eq.${AdminRules.safeId(ref)}", null)
 
     suspend fun addNews(title: String, excerpt: String, content: String, source: String, regionId: String, publish: Boolean, imageUrl: String? = null, videoUrl: String? = null) {
