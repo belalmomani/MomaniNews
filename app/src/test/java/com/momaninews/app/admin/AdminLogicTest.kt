@@ -91,7 +91,7 @@ class AdminLogicTest {
     @Test fun parseAds_endsAtKept() {
         val list = AdminParser.ads("""[{"id":4,"title":"إعلان","body":null,"contact":"07","created_at":"2026-10-01T00:00:00+00:00","ends_at":"2026-12-01T00:00:00+00:00"}]""")
         assertEquals("2026-12-01T00:00:00+00:00", list[0].extra)
-        assertTrue(list[0].meta.startsWith("07 • حتى"))
+        assertTrue(list[0].meta.contains("07 • حتى"))  // تسبقها حالة الإعلان (ساري/منتهٍ) حسب الوقت الحالي
     }
 
     @Test fun signedUrl_onlyAcceptsObjectSignPaths() {
