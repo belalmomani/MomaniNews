@@ -225,6 +225,21 @@ begin
   perform t.chk('ads_public: الساري فقط', t.sel(null, anon, 'select count(*) from public.ads_public'), '1');
   perform t.chk('ads_public: لا يكشف admin_note', t.sel(null, anon, 'select admin_note from public.ads_public'), 'ERR:42703');
   perform t.chk('ads_public: لا يكشف user_id', t.sel(null, anon, 'select user_id from public.ads_public'), 'ERR:42703');
+  -- ---------- إيقاف الإعلان والعدّادات ----------
+  perform t.chk('adpause: الساري يظهر', t.sel(null, anon, 'select count(*) from public.ads_public'), '1');
+  perform t.chk('adpause: الأدمن يوقف', t.dml(uc, au, 'update public.advertisements set is_paused=true where title=''إعلان 1'''), '1');
+  perform t.chk('adpause: الموقوف لا يظهر', t.sel(null, anon, 'select count(*) from public.ads_public'), '0');
+  perform t.chk('adpause: المستخدم لا يوقف/يستأنف', t.dml(ua, au, 'update public.advertisements set is_paused=false'), '0');
+  perform t.chk('adpause: المستخدم لا يضبط is_paused عند الإدراج', t.dml(ua, au, 'insert into public.advertisements (title,is_paused) values (''x'',true)'), 'ERR:42501');
+  perform t.chk('adpause: الأدمن يستأنف', t.dml(uc, au, 'update public.advertisements set is_paused=false where title=''إعلان 1'''), '1');
+  perform t.chk('track: مشاهدة من الزائر', t.sel(null, anon, format('select public.track_ad(%s,''view'')::text', (select id from public.advertisements where title='إعلان 1'))), '');
+  perform t.chk('track: نقرة من الزائر', t.sel(null, anon, format('select public.track_ad(%s,''click'')::text', (select id from public.advertisements where title='إعلان 1'))), '');
+  perform t.chk('track: العدّادان زادا', t.sel(null, su, 'select views||''/''||clicks from public.advertisements where title=''إعلان 1'''), '1/1');
+  perform t.chk('track: المنتهي لا يُحتسب', t.sel(null, anon, format('select public.track_ad(%s,''view'')::text', (select id from public.advertisements where title='إعلان 2'))), '');
+  perform t.chk('track: المنتهي بقي صفراً', t.sel(null, su, 'select views::text from public.advertisements where title=''إعلان 2'''), '0');
+  perform t.chk('track: نوع خاطئ مرفوض', t.sel(null, anon, 'select public.track_ad(1,''x'')'), 'ERR:P0001');
+  perform t.chk('track: لا تعديل مباشر للعدّاد', t.dml(null, anon, 'update public.advertisements set views=999'), 'ERR:42501');
+
   perform t.chk('ads: الجدول مغلق للزائر', t.sel(null, anon, 'select count(*) from public.advertisements'), 'ERR:42501');
 
   -- ---------- الإشعارات ----------
@@ -279,6 +294,28 @@ begin
   update public.users set is_banned = true where id = uc;
   perform t.chk('أدمن محظور يفقد الصلاحية', t.sel(uc, au, 'select count(*) from public.news'), t.sel(null, anon, 'select count(*) from public.news'));
   update public.users set is_banned = false where id = uc;
+
+  -- ---------- الإبلاغ عن تعليق ----------
+  perform t.chk('report: تحضير تعليق ظاهر', t.dml(ub, au, format('insert into public.comments (news_id,body) values (%s,''للإبلاغ'')', n_ok)), '1');
+  perform t.chk('report: الزائر مرفوض', t.sel(null, anon, 'select public.report_comment((select min(id) from public.comments))'), 'ERR:42501');
+  perform t.chk('report: لا يبلّغ عن تعليقه', t.sel(ub, au, format('select public.report_comment((select min(id) from public.comments where user_id=%L))', ub)), 'ERR:P0001');
+  perform t.chk('report: مستخدم يبلّغ عن تعليق غيره', t.sel(uc, au, format('select public.report_comment((select min(id) from public.comments where user_id=%L), ''مسيء'')::text', ub)), '');
+  perform t.chk('report: التكرار لا يضاعف', t.sel(uc, au, format('select public.report_comment((select min(id) from public.comments where user_id=%L))::text', ub)), '');
+  perform t.chk('report: بلاغ واحد فقط', t.sel(null, su, 'select count(*) from public.comment_reports'), '1');
+  perform t.chk('report: تعليق غير موجود', t.sel(uc, au, 'select public.report_comment(-1)'), 'ERR:P0002');
+  perform t.chk('report: الأدمن يقرأ البلاغات', t.sel(uc, au, 'select count(*) from public.comment_reports'), '1');
+  perform t.chk('report: المستخدم العادي لا يرى', t.sel(ua, au, 'select count(*) from public.comment_reports'), '0');
+  perform t.chk('report: الزائر محظور من الجدول', t.sel(null, anon, 'select count(*) from public.comment_reports'), 'ERR:42501');
+  perform t.chk('report: لا إدخال مباشر', t.dml(ua, au, format('insert into public.comment_reports (comment_id,reporter_id) values (1,%L)', ua)), 'ERR:42501');
+  perform t.chk('report: المحظور مرفوض', t.sel(ud, au, format('select public.report_comment((select min(id) from public.comments where user_id=%L))', ub)), 'ERR:42501');
+  perform t.chk('report: الأدمن يحذف البلاغ', t.dml(uc, au, 'delete from public.comment_reports'), '1');
+
+  -- ---------- مؤشرات الإدارة ----------
+  perform t.chk('stats: الزائر مرفوض', t.sel(null, anon, 'select public.admin_stats()'), 'ERR:42501');
+  perform t.chk('stats: المستخدم العادي مرفوض', t.sel(ua, au, 'select public.admin_stats()'), 'ERR:42501');
+  perform t.chk('stats: الأدمن يحصل على أرقام', t.sel(uc, au, 'select (public.admin_stats() ? ''news_pending'')::text'), 'true');
+  perform t.chk('stats: العدّ حقيقي', t.sel(uc, au, 'select (public.admin_stats()->>''users_total'')'), t.sel(null, su, 'select count(*) from public.users'));
+  perform t.chk('stats: الإعلانات الجارية', t.sel(uc, au, 'select (public.admin_stats()->>''ads_active'')'), t.sel(null, su, 'select count(*) from public.ads_public'));
 
   -- ---------- الحذف المتسلسل ----------
   delete from auth.users where id = ua;

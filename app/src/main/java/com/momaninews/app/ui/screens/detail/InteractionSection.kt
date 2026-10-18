@@ -81,6 +81,21 @@ fun InteractionSection(
         }
     }
 
+    fun onReport(commentId: Int) {
+        scope.launch {
+            try {
+                interaction.reportComment(commentId)
+                message = "تم إرسال البلاغ، شكراً لك."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: com.momaninews.app.data.interaction.OwnCommentException) {
+                message = "لا يمكنك الإبلاغ عن تعليقك."
+            } catch (e: Exception) {
+                message = "تعذر إرسال البلاغ."
+            }
+        }
+    }
+
     fun onSubmitComment() {
         val text = draft
         scope.launch {
@@ -162,13 +177,27 @@ fun InteractionSection(
         }
 
         comments.forEach { comment ->
-            CommentCard(comment = comment)
+            CommentCard(comment = comment, onReport = if (user != null) ({ onReport(comment.id) }) else null)
         }
     }
 }
 
 @Composable
-private fun CommentCard(comment: Comment) {
+private fun CommentCard(comment: Comment, onReport: (() -> Unit)? = null) {
+    var confirm by remember { mutableStateOf(false) }
+    if (confirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("الإبلاغ عن التعليق") },
+            text = { Text("هل تريد الإبلاغ عن هذا التعليق للمراجعة؟") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { confirm = false; onReport?.invoke() }) { Text("إبلاغ") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirm = false }) { Text("إلغاء") }
+            }
+        )
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -197,6 +226,11 @@ private fun CommentCard(comment: Comment) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (onReport != null) {
+                androidx.compose.material3.TextButton(onClick = { confirm = true }) {
+                    Text("إبلاغ", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }

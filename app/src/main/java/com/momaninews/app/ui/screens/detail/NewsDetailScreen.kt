@@ -201,7 +201,10 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
                 }) { Text("فتح المصدر") }
             }
             androidx.compose.material3.OutlinedButton(onClick = {
-                val body = news.title + (news.sourceUrl?.let { "\n" + it } ?: "") + "\n\nعبر تطبيق المومني نيوز"
+                val privacy = com.momaninews.app.BuildConfig.PRIVACY_URL
+                val page = if (privacy.startsWith("https://") && privacy.endsWith("/privacy.html"))
+                    privacy.removeSuffix("privacy.html") + "news.html?id=" + news.id else null
+                val body = news.title + (page?.let { "\n" + it } ?: news.sourceUrl?.let { "\n" + it } ?: "") + "\n\nعبر تطبيق المومني نيوز"
                 runCatching {
                     ctx.startActivity(
                         android.content.Intent.createChooser(

@@ -1,0 +1,24 @@
+select file, check_name,
+       case when ok then 'OK' else 'MISSING' end as status
+from (
+  values
+  ('20261015120000_initial_schema.sql', 'جدول news',                 to_regclass('public.news') is not null),
+  ('20261015120000_initial_schema.sql', 'جدول advertisements',       to_regclass('public.advertisements') is not null),
+  ('20261015120000_initial_schema.sql', 'دالة is_admin',             to_regprocedure('public.is_admin()') is not null),
+  ('20261017120000_delete_my_account.sql', 'دالة delete_my_account', to_regprocedure('public.delete_my_account()') is not null),
+  ('20261017130000_news_media.sql', 'عمود news.image_url',           exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='image_url')),
+  ('20261017130000_news_media.sql', 'عمود news.video_url',           exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='video_url')),
+  ('20261017130000_news_media.sql', 'حاوية news-media',              exists (select 1 from storage.buckets where id='news-media')),
+  ('20261017140000_media_types.sql', 'webm مسموح في news-media',     coalesce((select 'video/webm' = any(allowed_mime_types) from storage.buckets where id='news-media'), false)),
+  ('20261017150000_fetch_engine.sql', 'جدول news_refs',              to_regclass('public.news_refs') is not null),
+  ('20261017150000_fetch_engine.sql', 'جدول fetch_runs',             to_regclass('public.fetch_runs') is not null),
+  ('20261017150000_fetch_engine.sql', 'عمود news.fingerprint',       exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='fingerprint')),
+  ('20261017150000_fetch_engine.sql', 'عمود keywords.kind',          exists (select 1 from information_schema.columns where table_schema='public' and table_name='keywords' and column_name='kind')),
+  ('20261017150000_fetch_engine.sql', 'منطقة momani',                exists (select 1 from public.regions where id='momani')),
+  ('20261018100000_comment_reports.sql', 'جدول comment_reports',     to_regclass('public.comment_reports') is not null),
+  ('20261018100000_comment_reports.sql', 'دالة report_comment',      to_regprocedure('public.report_comment(bigint,text)') is not null),
+  ('20261018110000_ad_pause_metrics.sql', 'عمود advertisements.is_paused', exists (select 1 from information_schema.columns where table_schema='public' and table_name='advertisements' and column_name='is_paused')),
+  ('20261018110000_ad_pause_metrics.sql', 'دالة track_ad',           to_regprocedure('public.track_ad(bigint,text)') is not null),
+  ('20261018120000_admin_stats.sql', 'دالة admin_stats',             to_regprocedure('public.admin_stats()') is not null)
+) as c(file, check_name, ok)
+order by file, check_name;

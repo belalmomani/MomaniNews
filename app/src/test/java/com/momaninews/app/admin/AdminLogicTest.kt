@@ -190,4 +190,13 @@ class AdminLogicTest {
         assertNull(AdminRules.parseKeywordInput("bogus كلمة"))
         assertNull(AdminRules.parseKeywordInput("name"))
     }
+
+    @Test fun adStateLabels() {
+        val now = Instant.parse("2026-10-18T00:00:00Z")
+        assertEquals("ساري", AdminRules.adState(false, "2026-10-20T00:00:00Z", now))
+        assertEquals("منتهٍ", AdminRules.adState(false, "2026-10-10T00:00:00Z", now))
+        assertEquals("موقوف", AdminRules.adState(true, "2026-10-20T00:00:00Z", now))
+        assertEquals("", AdminRules.adState(false, "", now))
+        assertEquals("", AdminRules.adState(false, "garbage", now))
+    }
 }

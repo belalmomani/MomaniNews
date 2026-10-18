@@ -137,6 +137,23 @@ fun HomeScreen(
                                     onClick = { onNewsClick(news.id) }
                                 )
                             }
+                            if (state.canLoadMore) {
+                                item(key = "load-more") {
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = viewModel::loadMore,
+                                        enabled = !state.isLoadingMore,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            when {
+                                                state.isLoadingMore -> "جارٍ التحميل..."
+                                                state.loadMoreFailed -> "تعذر التحميل، أعد المحاولة"
+                                                else -> "تحميل المزيد"
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

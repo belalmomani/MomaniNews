@@ -11,7 +11,8 @@ object Regions {
     val Sakhra = Region(id = "sakhra", nameAr = "صخرة")
 
     // قابلة للتوسع لاحقاً بإضافة مناطق أخرى.
-    val all: List<Region> = listOf(Abeen, Abelin, Sakhra)
+    val Momani = Region(id = "momani", nameAr = "أخبار المومني")
+    val all: List<Region> = listOf(Abeen, Abelin, Sakhra, Momani)
 }
 
 data class NewsItem(

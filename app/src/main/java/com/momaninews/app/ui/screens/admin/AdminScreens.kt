@@ -61,6 +61,7 @@ fun AdminHomeScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
+                    "المؤشرات" to "admin/stats",
                     "الأخبار (اعتماد / رفض)" to "admin/news",
                     "إضافة خبر" to "admin/addnews",
                     "التعليقات" to "admin/comments",
@@ -108,6 +109,11 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
 fun AdminCommentsScreen(onBack: () -> Unit) = AdminGate("التعليقات", onBack) { r ->
     AdminListScreen(
         "التعليقات", onBack, listOf(
+            AdminTab("المُبلَّغ عنها", "لا توجد بلاغات", { r.reportedComments() }) { c -> listOf(
+                AdminAction(if (c.flag) "إظهار" else "إخفاء") { i, _ -> r.setCommentHidden(i.ref, !i.flag) },
+                AdminAction("تجاهل البلاغات", confirm = "حذف البلاغات وإبقاء التعليق؟") { i, _ -> r.dismissReports(i.ref) },
+                AdminAction("حذف", danger = true, confirm = "حذف التعليق نهائياً؟") { i, _ -> r.deleteComment(i.ref) }
+            ) },
             AdminTab("آخر التعليقات", "لا توجد تعليقات", { r.comments() }) { c -> listOf(
                 AdminAction(if (c.flag) "إظهار" else "إخفاء") { i, _ -> r.setCommentHidden(i.ref, !i.flag) },
                 AdminAction("حذف", danger = true, confirm = "حذف التعليق نهائياً؟") { i, _ -> r.deleteComment(i.ref) }
@@ -143,11 +149,12 @@ fun AdminAdsScreen(onBack: () -> Unit) = AdminGate("الإعلانات", onBack)
                 },
                 AdminAction("رفض", danger = true, prompt = "سبب الرفض (اختياري)") { i, t -> r.rejectAd(i.ref, t.orEmpty()) }
             ) },
-            AdminTab("المعتمدة", "لا توجد إعلانات معتمدة", { r.approvedAds() }) { listOf(
+            AdminTab("المعتمدة", "لا توجد إعلانات معتمدة", { r.approvedAds() }) { a -> listOf(
                 AdminAction("تمديد", prompt = "عدد أيام التمديد (1 - 365)", promptDefault = "7") { i, t ->
                     r.extendAd(i, requireNotNull(AdminRules.parseDays(t)))
                 },
-                AdminAction("إيقاف", danger = true, confirm = "إيقاف هذا الإعلان؟") { i, _ -> r.rejectAd(i.ref, "أوقفه المدير") },
+                AdminAction(if (a.flag) "استئناف" else "إيقاف مؤقت") { i, _ -> r.setAdPaused(i.ref, !i.flag) },
+                AdminAction("رفض نهائي", danger = true, confirm = "إلغاء اعتماد هذا الإعلان؟") { i, _ -> r.rejectAd(i.ref, "أوقفه المدير") },
                 AdminAction("حذف", danger = true, confirm = "حذف الإعلان نهائياً؟") { i, _ -> r.deleteAd(i.ref) }
             ) }
         )
@@ -243,6 +250,15 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
             ) { Text("حفظ") }
         }
     }
+}
+
+@Composable
+fun AdminStatsScreen(onBack: () -> Unit) = AdminGate("المؤشرات", onBack) { r ->
+    AdminListScreen(
+        "المؤشرات", onBack, listOf(
+            AdminTab("الأرقام", "لا بيانات", { r.stats() }) { emptyList() }
+        )
+    )
 }
 
 @Composable

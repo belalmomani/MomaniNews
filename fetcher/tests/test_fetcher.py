@@ -238,5 +238,17 @@ class RunTests(unittest.TestCase):
         self.assertEqual(len(store.refs), 1)
 
 
+class StoreHeaderTests(unittest.TestCase):
+    def test_new_secret_key_not_sent_as_bearer(self):
+        from momani_fetcher.store import SupabaseStore
+        h = SupabaseStore("https://x.supabase.co", "sb_secret_abc")._headers()
+        self.assertEqual(h["apikey"], "sb_secret_abc"); self.assertNotIn("Authorization", h)
+
+    def test_legacy_jwt_key_sent_as_bearer(self):
+        from momani_fetcher.store import SupabaseStore
+        h = SupabaseStore("https://x.supabase.co", "eyJhbGciOi.abc.def")._headers()
+        self.assertEqual(h["Authorization"], "Bearer eyJhbGciOi.abc.def")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@ name: Deploy admin panel
 on:
   push:
     branches: [main]
-    paths: ["admin/**", ".github/workflows/deploy-admin.yml"]
+    paths: ["admin/**", "web/**", ".github/workflows/deploy-admin.yml"]
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Keep only the page itself (no tests)
-        run: mkdir site && cp admin/index.html admin/privacy.html site/
+        run: mkdir site && cp admin/index.html admin/privacy.html web/news.html site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

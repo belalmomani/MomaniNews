@@ -22,17 +22,20 @@ import androidx.compose.ui.unit.dp
 import com.momaninews.app.data.ads.ActiveAd
 import com.momaninews.app.data.ads.ActiveAdsRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** إعلانات المعلنين المعتمدة (غير إعلانات Start.io). تُوسَم بوضوح «إعلان». لا شيء يظهر إن لم توجد أو فشل التحميل. */
 @Composable
 fun ActiveAdsSection(modifier: Modifier = Modifier) {
     var ads by remember { mutableStateOf<List<ActiveAd>>(emptyList()) }
     val uriHandler = LocalUriHandler.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         if (!ActiveAdsRepository.isAvailable) return@LaunchedEffect
         try {
             ads = ActiveAdsRepository.load()
+            ads.forEach { ActiveAdsRepository.track(it.id, "view") }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -58,7 +61,10 @@ fun ActiveAdsSection(modifier: Modifier = Modifier) {
                         Text("للتواصل: ${ad.contact}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     ad.linkUrl?.let { url ->
-                        OutlinedButton(onClick = { runCatching { uriHandler.openUri(url) } }) { Text("فتح الرابط") }
+                        OutlinedButton(onClick = {
+                            scope.launch { ActiveAdsRepository.track(ad.id, "click") }
+                            runCatching { uriHandler.openUri(url) }
+                        }) { Text("فتح الرابط") }
                     }
                 }
             }

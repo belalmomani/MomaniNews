@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+class OwnCommentException : Exception("own comment")
 class CommentRateLimitedException : Exception("comment rate limited")
 
 /**
@@ -83,6 +84,17 @@ class SupabaseInteractionRepository(
         }
         // التعليق المنشور يُقرأ من العرض العام (المصدر الوحيد للعرض) فيظهر بالاسم والتاريخ الصحيحين.
         return getComments(newsId).firstOrNull() ?: throw IOException("comment not visible")
+    }
+
+    override suspend fun reportComment(commentId: Int, reason: String?) {
+        val token = tokenProvider() ?: throw NotSignedInException()
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_comment_id", commentId)
+            reason?.takeIf { it.isNotBlank() }?.let { body.put("p_reason", it.trim().take(200)) }
+            val r = rest.call("POST", "rpc/report_comment", body.toString(), bearer = token)
+            if (r.code == 400 && SupabaseInteractionParser.errorMessage(r.body) == "own_comment") throw OwnCommentException()
+            requireOk(r)
+        }
     }
 
     /** true إذا عُدّل صف واحد على الأقل. */

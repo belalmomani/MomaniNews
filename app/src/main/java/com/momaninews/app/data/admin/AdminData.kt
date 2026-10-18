@@ -29,11 +29,18 @@ data class AdminItem(
     val flag: Boolean = false
 )
 
-val ADMIN_REGIONS = listOf("abeen" to "عبين", "abelin" to "عبلين", "sakhra" to "صخرة")
+val ADMIN_REGIONS = listOf("abeen" to "عبين", "abelin" to "عبلين", "sakhra" to "صخرة", "momani" to "أخبار المومني")
 
 data class KeywordInput(val kind: String, val word: String, val regionId: String?, val needsContext: Boolean)
 
 object AdminRules {
+    /** حالة الإعلان المعتمد: موقوف / منتهٍ / ساري («» إن لم يُعتمد بعد). */
+    fun adState(paused: Boolean, endsAt: String, now: Instant): String {
+        if (endsAt.isEmpty()) return ""
+        if (paused) return "موقوف"
+        val end = runCatching { Instant.parse(endsAt) }.getOrNull() ?: return ""
+        return if (end.isBefore(now)) "منتهٍ" else "ساري"
+    }
     val KEYWORD_KINDS = listOf("region", "alias", "name", "context", "exclude")
     fun kindLabel(kind: String) = when (kind) {
         "region" -> "منطقة"; "alias" -> "اسم بديل"; "name" -> "اسم شخص"; "context" -> "سياق"; "exclude" -> "استبعاد"; else -> kind
@@ -135,6 +142,25 @@ object AdminParser {
         return parts.joinToString("\n")
     }
 
+    private val STAT_LABELS = listOf(
+        "news_pending" to "أخبار بانتظار الاعتماد", "news_approved" to "أخبار منشورة", "news_rejected" to "أخبار مرفوضة",
+        "news_fetched" to "أخبار مجلوبة تلقائياً", "news_last_7d" to "منشور في آخر 7 أيام",
+        "users_total" to "المستخدمون", "users_new_7d" to "مستخدمون جدد (7 أيام)",
+        "comments_visible" to "تعليقات ظاهرة", "comments_reported" to "تعليقات مُبلَّغ عنها",
+        "verification_pending" to "طلبات توثيق معلّقة", "ads_pending" to "طلبات إعلان معلّقة", "ads_active" to "إعلانات سارية",
+        "ads_views" to "مشاهدات الإعلانات (تقريبي)", "ads_clicks" to "نقرات الإعلانات (تقريبي)",
+        "sources_active" to "مصادر مفعّلة", "sources_failing" to "مصادر فاشلة"
+    )
+
+    fun stats(json: String): List<AdminItem> {
+        val o = JSONObject(json)
+        val rows = STAT_LABELS.filter { o.has(it.first) }.map { (k, label) ->
+            AdminItem(ref = k, title = label, meta = o.optLong(k).toString(), flag = k.endsWith("failing") && o.optLong(k) > 0)
+        }
+        val last = if (o.isNull("last_fetch_at")) "لم يُشغَّل بعد" else date(o, "last_fetch_at")
+        return rows + AdminItem(ref = "last_fetch_at", title = "آخر جلب للأخبار", meta = last)
+    }
+
     fun comments(json: String): List<AdminItem> {
         val a = JSONArray(json)
         return List(a.length()) { i ->
@@ -167,12 +193,16 @@ object AdminParser {
         return List(a.length()) { i ->
             val r = a.getJSONObject(i)
             val ends = str(r, "ends_at")
+            val paused = r.optBoolean("is_paused", false)
+            val state = AdminRules.adState(paused, ends, Instant.now())
+            val stats = if (r.has("views")) " • مشاهدات ${r.optLong("views")} • نقرات ${r.optLong("clicks")}" else ""
             AdminItem(
                 ref = r.get("id").toString(),
                 title = str(r, "title"),
-                meta = listOf(str(r, "contact"), if (ends.isNotEmpty()) "حتى " + date(r, "ends_at") else date(r, "created_at")).filter { it.isNotBlank() }.joinToString(" • "),
+                meta = listOf(state, str(r, "contact"), if (ends.isNotEmpty()) "حتى " + date(r, "ends_at") else date(r, "created_at")).filter { it.isNotBlank() }.joinToString(" • ") + stats,
                 body = str(r, "body"),
-                extra = ends
+                extra = ends,
+                flag = paused
             )
         }
     }
@@ -377,6 +407,23 @@ class AdminRepository(
     }
 
     // ---- التعليقات
+    suspend fun reportedComments(): List<AdminItem> {
+        val reports = JSONArray(get("comment_reports?select=comment_id,reason&order=created_at.desc&limit=200"))
+        val counts = linkedMapOf<Long, Int>(); val reasons = mutableMapOf<Long, String>()
+        for (i in 0 until reports.length()) {
+            val o = reports.getJSONObject(i); val id = o.getLong("comment_id")
+            counts[id] = (counts[id] ?: 0) + 1
+            o.optString("reason", "").takeIf { it.isNotBlank() && it != "null" }?.let { reasons.putIfAbsent(id, it) }
+        }
+        if (counts.isEmpty()) return emptyList()
+        val ids = counts.keys.joinToString(",") { AdminRules.safeId(it.toString()) }
+        val rows = AdminParser.comments(get("comments?select=id,body,status,created_at,news_id,user_id&id=in.($ids)"))
+        return rows.sortedByDescending { counts[it.ref.toLongOrNull()] ?: 0 }.map {
+            val n = counts[it.ref.toLongOrNull()] ?: 0
+            it.copy(meta = "بلاغات: $n" + (reasons[it.ref.toLongOrNull()]?.let { r -> " • $r" } ?: "") + " • " + it.meta)
+        }
+    }
+    suspend fun dismissReports(commentRef: String) = write("DELETE", "comment_reports?comment_id=eq.${AdminRules.safeId(commentRef)}", null)
     suspend fun comments() = AdminParser.comments(get("comments?select=id,body,status,created_at,news_id,user_id&order=created_at.desc&limit=50"))
     suspend fun setCommentHidden(ref: String, hidden: Boolean) =
         write("PATCH", "comments?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("status", if (hidden) "hidden" else "visible"))
@@ -410,7 +457,7 @@ class AdminRepository(
 
     // ---- الإعلانات
     suspend fun pendingAds() = AdminParser.ads(get("advertisements?select=id,title,body,contact,created_at&status=eq.pending&order=created_at.asc&limit=100"))
-    suspend fun approvedAds() = AdminParser.ads(get("advertisements?select=id,title,body,contact,created_at,ends_at&status=eq.approved&order=ends_at.desc&limit=100"))
+    suspend fun approvedAds() = AdminParser.ads(get("advertisements?select=id,title,body,contact,created_at,ends_at,is_paused,views,clicks&status=eq.approved&order=ends_at.desc&limit=100"))
     suspend fun approveAd(ref: String, days: Int) {
         val (s, e) = AdminRules.adWindow(Instant.now(), days)
         write("PATCH", "advertisements?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("status", "approved").put("starts_at", s).put("ends_at", e))
@@ -424,6 +471,8 @@ class AdminRepository(
         val current = runCatching { Instant.parse(item.extra) }.getOrNull()
         write("PATCH", "advertisements?id=eq.${AdminRules.safeId(item.ref)}", JSONObject().put("ends_at", AdminRules.extendedEnd(Instant.now(), current, days)))
     }
+    suspend fun setAdPaused(ref: String, paused: Boolean) =
+        write("PATCH", "advertisements?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_paused", paused))
     suspend fun deleteAd(ref: String) = write("DELETE", "advertisements?id=eq.${AdminRules.safeId(ref)}", null)
 
     // ---- المستخدمون
@@ -435,6 +484,13 @@ class AdminRepository(
             val r = rest.call("POST", "rpc/admin_set_user_flags", body.toString(), bearer = token())
             if (!r.ok) throw IOException("HTTP ${r.code}")
         }
+    }
+
+    // ---- مؤشرات (دالة admin_stats: أرقام حقيقية تُحسب عند الطلب)
+    suspend fun stats(): List<AdminItem> = withContext(Dispatchers.IO) {
+        val r = rest.call("POST", "rpc/admin_stats", "{}", bearer = token())
+        if (!r.ok) throw IOException("HTTP ${r.code}")
+        AdminParser.stats(r.body)
     }
 
     // ---- إشعار عام

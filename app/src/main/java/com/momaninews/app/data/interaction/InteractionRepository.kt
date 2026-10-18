@@ -35,6 +35,9 @@ interface InteractionRepository {
     suspend fun vote(newsId: Int, vote: CredibilityVote): VoteSummary
     suspend fun getComments(newsId: Int): List<Comment>
     suspend fun addComment(newsId: Int, text: String): Comment
+
+    /** إبلاغ عن تعليق مسيء. التنفيذ التجريبي لا يفعل شيئاً. */
+    suspend fun reportComment(commentId: Int, reason: String? = null) {}
 }
 
 /**

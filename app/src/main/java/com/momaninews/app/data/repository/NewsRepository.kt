@@ -9,4 +9,10 @@ import com.momaninews.app.data.model.NewsItem
 interface NewsRepository {
     suspend fun getNews(): List<NewsItem>
     suspend fun getNewsById(id: Int): NewsItem?
+
+    /** صفحة تبدأ من [offset]. الافتراضي: الصفحة الأولى فقط. */
+    suspend fun getNews(offset: Int): List<NewsItem> = if (offset == 0) getNews() else emptyList()
+
+    /** حجم الصفحة؛ إن رجع أقل منه فلا يوجد المزيد. */
+    val pageSize: Int get() = Int.MAX_VALUE
 }

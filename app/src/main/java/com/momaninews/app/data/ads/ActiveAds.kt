@@ -37,6 +37,14 @@ object ActiveAdsRepository {
 
     val isAvailable: Boolean get() = rest != null
 
+    /** عدّاد تقريبي للمشاهدات/النقرات؛ الفشل صامت. */
+    suspend fun track(adId: Int, kind: String) = withContext(Dispatchers.IO) {
+        val client = rest ?: return@withContext
+        runCatching {
+            client.call("POST", "rpc/track_ad", org.json.JSONObject().put("p_ad_id", adId).put("p_kind", kind).toString())
+        }
+    }
+
     suspend fun load(): List<ActiveAd> = withContext(Dispatchers.IO) {
         val client = rest ?: return@withContext emptyList()
         val r = client.call("GET", "ads_public?select=id,title,body,contact,link_url&order=starts_at.desc&limit=5")

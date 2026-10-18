@@ -79,6 +79,7 @@ fun AppNavHost() {
         composable(Routes.ADMIN_VERIFICATION) { AdminVerificationScreen { navController.popBackStack() } }
         composable(Routes.ADMIN_ADS) { AdminAdsScreen { navController.popBackStack() } }
         composable(Routes.ADMIN_USERS) { AdminUsersScreen { navController.popBackStack() } }
+        composable(Routes.ADMIN_STATS) { com.momaninews.app.ui.screens.admin.AdminStatsScreen { navController.popBackStack() } }
         composable(Routes.ADMIN_NOTIFY) { AdminNotifyScreen { navController.popBackStack() } }
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { navController.popBackStack() })

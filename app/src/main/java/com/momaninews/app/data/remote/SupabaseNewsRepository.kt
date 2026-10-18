@@ -33,6 +33,14 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
         SupabaseNewsParser.parseList(body)
     }
 
+    override val pageSize: Int get() = PAGE_SIZE
+
+    override suspend fun getNews(offset: Int): List<NewsItem> = withContext(Dispatchers.IO) {
+        val off = offset.coerceAtLeast(0)
+        val body = get("news?select=${SupabaseNewsParser.SELECT}&order=published_at.desc&limit=$PAGE_SIZE&offset=$off")
+        SupabaseNewsParser.parseList(body)
+    }
+
     override suspend fun getNewsById(id: Int): NewsItem? = withContext(Dispatchers.IO) {
         val body = get("news?select=${SupabaseNewsParser.SELECT}&id=eq.$id&limit=1")
         SupabaseNewsParser.parseFirstOrNull(body)

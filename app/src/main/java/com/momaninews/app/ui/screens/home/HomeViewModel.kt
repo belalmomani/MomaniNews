@@ -21,6 +21,9 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     val allNews: List<NewsItem> = emptyList(),
     val errorMessage: String? = null,
+    val isLoadingMore: Boolean = false,
+    val canLoadMore: Boolean = false,
+    val loadMoreFailed: Boolean = false,
     val query: String = "",
     val selectedRegionId: String? = null
 ) {
@@ -56,6 +59,29 @@ class HomeViewModel(
         _uiState.update { it.copy(query = "", selectedRegionId = null) }
     }
 
+    fun loadMore() {
+        val s = _uiState.value
+        if (s.isLoading || s.isRefreshing || s.isLoadingMore || !s.canLoadMore) return
+        _uiState.update { it.copy(isLoadingMore = true, loadMoreFailed = false) }
+        viewModelScope.launch {
+            try {
+                val page = repository.getNews(_uiState.value.allNews.size)
+                _uiState.update {
+                    val known = it.allNews.map { n -> n.id }.toSet()
+                    it.copy(
+                        isLoadingMore = false,
+                        allNews = it.allNews + page.filter { n -> n.id !in known },
+                        canLoadMore = page.size >= repository.pageSize
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoadingMore = false, loadMoreFailed = true) }
+            }
+        }
+    }
+
     fun retry() = load(isRefresh = false)
 
     fun refresh() = load(isRefresh = true)
@@ -77,6 +103,8 @@ class HomeViewModel(
                         isLoading = false,
                         isRefreshing = false,
                         allNews = items,
+                        canLoadMore = items.size >= repository.pageSize,
+                        loadMoreFailed = false,
                         errorMessage = null
                     )
                 }

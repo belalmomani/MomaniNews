@@ -20,8 +20,15 @@ class SupabaseStore:
         self.base = url.rstrip("/") + "/rest/v1/"
         self._key = service_key
 
+    def _headers(self) -> dict:
+        h = {"apikey": self._key, "Accept": "application/json"}
+        # المفاتيح الجديدة (sb_secret_...) ليست JWT فتُرسل في apikey فقط؛ المفتاح القديم (JWT) يُرسل أيضاً كـ Bearer.
+        if self._key.startswith("eyJ"):
+            h["Authorization"] = "Bearer " + self._key
+        return h
+
     def _call(self, method: str, path: str, body=None, prefer: str | None = None):
-        headers = {"apikey": self._key, "Authorization": "Bearer " + self._key, "Accept": "application/json"}
+        headers = self._headers()
         data = None
         if body is not None:
             data = json.dumps(body).encode("utf-8")

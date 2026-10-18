@@ -17,6 +17,7 @@ object Routes {
     const val ADMIN_ADS = "admin/ads"
     const val ADMIN_USERS = "admin/users"
     const val ADMIN_NOTIFY = "admin/notify"
+    const val ADMIN_STATS = "admin/stats"
 
     const val ARG_NEWS_ID = "newsId"
     const val NEWS_DETAIL = "news/{$ARG_NEWS_ID}"
