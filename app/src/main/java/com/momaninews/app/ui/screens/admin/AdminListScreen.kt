@@ -18,7 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -104,9 +104,9 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
     ScreenScaffold(title = title, onBack = onBack) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (tabs.size > 1) {
-                TabRow(selectedTabIndex = tabIndex) {
+                ScrollableTabRow(selectedTabIndex = tabIndex, edgePadding = 8.dp) {
                     tabs.forEachIndexed { i, t ->
-                        Tab(selected = i == tabIndex, onClick = { tabIndex = i; message = null }, text = { Text(t.label) })
+                        Tab(selected = i == tabIndex, onClick = { tabIndex = i; message = null }, text = { Text(t.label, maxLines = 1, softWrap = false) })
                     }
                 }
             }
