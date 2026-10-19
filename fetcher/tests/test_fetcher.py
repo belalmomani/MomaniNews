@@ -238,6 +238,87 @@ class RunTests(unittest.TestCase):
         self.assertEqual(len(store.refs), 1)
 
 
+HOME = """<!doctype html><html><head><title>t</title>
+<link rel="alternate" type="application/rss+xml" href="/custom/feed.xml">
+<link rel="alternate" type="application/rss+xml" href="https://evil.example/feed">
+<link rel="alternate" type="application/rss+xml" href="http://site.example/insecure">
+</head><body>x</body></html>""".encode("utf-8")
+
+
+class DiscoveryTests(unittest.TestCase):
+    def test_link_tags_same_host_https_only(self):
+        urls = feeds.discover_feed_urls(HOME, "https://site.example/")
+        self.assertEqual(urls[0], "https://site.example/custom/feed.xml")
+        self.assertNotIn("https://evil.example/feed", urls)
+        self.assertTrue(all(u.startswith("https://site.example") for u in urls))
+        self.assertIn("https://site.example/rss", urls)
+
+    def test_load_items_follows_discovery(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            return HOME if url == "https://site.example/" else RSS
+        items, used = feeds.load_items("https://site.example/", fetch)
+        self.assertEqual(used, "https://site.example/custom/feed.xml")
+        self.assertEqual(len(items), 5)
+
+    def test_discovery_falls_back_to_common_paths(self):
+        plain = b"<!doctype html><html><head></head><body></body></html>"
+        def fetch(url):
+            if url == "https://site.example/": return plain
+            if url == "https://site.example/rss": return RSS
+            raise feeds.FeedError("HTTP 404")
+        items, used = feeds.load_items("https://site.example/", fetch)
+        self.assertEqual(used, "https://site.example/rss")
+
+    def test_no_feed_found_raises_clear_error(self):
+        plain = b"<!doctype html><html><body>x</body></html>"
+        def fetch(url):
+            if url == "https://site.example/": return plain
+            raise feeds.FeedError("HTTP 404")
+        with self.assertRaises(feeds.FeedError) as cm:
+            feeds.load_items("https://site.example/", fetch)
+        self.assertIn("لم يُعثر", str(cm.exception))
+
+    def test_non_html_garbage_not_discovered(self):
+        with self.assertRaises(feeds.FeedError):
+            feeds.load_items("https://site.example/x", lambda u: b"\x00garbage")
+
+    def test_run_accepts_homepage_source(self):
+        store = FakeStore([{"id": 1, "name": "م", "url": "https://site.example/", "kind": "rss"}], KWROWS)
+        stats = run.run(store, fetch=lambda u: HOME if u == "https://site.example/" else RSS)
+        self.assertEqual(stats.items_inserted, 1)
+        self.assertEqual(stats.sources_failed, 0)
+
+
+class RobotsTests(unittest.TestCase):
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_disallowed_site_refused_without_fetching_feed(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if url.endswith("/robots.txt"): return b"User-agent: *\nDisallow: /\n"
+            return RSS
+        with self.assertRaises(feeds.FeedError) as cm: feeds.load_items("https://blocked.example/feed", fetch)
+        self.assertIn("robots", str(cm.exception))
+        self.assertNotIn("https://blocked.example/feed", calls)
+
+    def test_allowed_and_missing_robots(self):
+        def fetch_ok(url): return b"User-agent: *\nDisallow: /admin\n" if url.endswith("robots.txt") else RSS
+        self.assertEqual(len(feeds.load_items("https://ok.example/feed", fetch_ok)[0]), 5)
+        feeds._ROBOTS_CACHE.clear()
+        def fetch_404(url):
+            if url.endswith("robots.txt"): raise feeds.FeedError("HTTP 404")
+            return RSS
+        self.assertEqual(len(feeds.load_items("https://nr.example/feed", fetch_404)[0]), 5)
+
+    def test_specific_bot_rule(self):
+        feeds._ROBOTS_CACHE.clear()
+        def fetch(url): return b"User-agent: MomaniNewsBot\nDisallow: /\n" if url.endswith("robots.txt") else RSS
+        with self.assertRaises(feeds.FeedError): feeds.load_items("https://x.example/feed", fetch)
+
+
 class StoreHeaderTests(unittest.TestCase):
     def test_new_secret_key_not_sent_as_bearer(self):
         from momani_fetcher.store import SupabaseStore

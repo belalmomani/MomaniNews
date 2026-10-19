@@ -35,7 +35,8 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
         stats.errors.append(f"{name}: نوع غير مدعوم")
         return
     try:
-        items = feeds.parse_feed(fetch(url))[:MAX_ITEMS_PER_FEED]
+        items, used_url = feeds.load_items(url, fetch)
+        items = items[:MAX_ITEMS_PER_FEED]
     except feeds.FeedError as e:
         store.source_result(sid, False, str(e))
         store.log_failure(sid, url, str(e))
