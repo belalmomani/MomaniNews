@@ -15,9 +15,16 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -32,6 +39,13 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
+import com.momaninews.app.data.auth.AuthRepositories
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -52,32 +66,86 @@ import com.momaninews.app.ui.components.NewsCard
 fun HomeScreen(
     onNewsClick: (Int) -> Unit,
     onProfileClick: () -> Unit,
+    onNotificationsClick: () -> Unit = {},
+    onAdRequestClick: () -> Unit = {},
+    onVerificationClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onAdminClick: () -> Unit = {},
+    onSignInClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
+    val auth = AuthRepositories.default
+    val user by auth.currentUser.collectAsStateWithLifecycle()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var searchOpen by remember { mutableStateOf(false) }
+
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val visibleNews = state.visibleNews
     val errorMessage = state.errorMessage
 
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            HomeDrawerContent(
+                user = user,
+                selectedRegionId = state.selectedRegionId,
+                onEntry = { e ->
+                    scope.launch { drawerState.close() }
+                    when (e.action) {
+                        DrawerAction.HOME -> viewModel.onRegionSelected(null)
+                        DrawerAction.REGION -> viewModel.onRegionSelected(e.regionId)
+                        DrawerAction.NOTIFICATIONS -> onNotificationsClick()
+                        DrawerAction.AD_REQUEST -> onAdRequestClick()
+                        DrawerAction.VERIFICATION -> onVerificationClick()
+                        DrawerAction.SETTINGS -> onSettingsClick()
+                        DrawerAction.ADMIN -> onAdminClick()
+                        DrawerAction.SIGN_IN -> onSignInClick()
+                        DrawerAction.SIGN_OUT -> auth.signOut()
+                    }
+                }
+            )
+        }
+    ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = { BannerAd() },
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(imageVector = Icons.Default.Menu, contentDescription = "القائمة")
+                    }
+                },
                 title = {
                     Text(
                         text = "المومني نيوز",
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (searchOpen) viewModel.onQueryChange("")
+                        searchOpen = !searchOpen
+                    }) {
+                        Icon(
+                            imageVector = if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = if (searchOpen) "إغلاق البحث" else "بحث"
+                        )
+                    }
+                    IconButton(onClick = onNotificationsClick) {
+                        Icon(imageVector = Icons.Default.Notifications, contentDescription = "الإشعارات")
+                    }
                     IconButton(onClick = onProfileClick) {
                         Icon(imageVector = Icons.Default.Person, contentDescription = "الحساب")
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
@@ -88,10 +156,12 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            SearchField(
-                query = state.query,
-                onQueryChange = viewModel::onQueryChange
-            )
+            if (searchOpen || state.query.isNotEmpty()) {
+                SearchField(
+                    query = state.query,
+                    onQueryChange = viewModel::onQueryChange
+                )
+            }
             RegionChips(
                 selectedRegionId = state.selectedRegionId,
                 onRegionSelected = viewModel::onRegionSelected
@@ -165,6 +235,7 @@ fun HomeScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -206,37 +277,27 @@ private fun SearchField(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** تبويبات المناطق بنمط فيسبوك (خط سفلي للتبويب المحدد) مع «الكل». */
 @Composable
 private fun RegionChips(
     selectedRegionId: String?,
     onRegionSelected: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chipColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-    )
-
-    LazyRow(
+    val tabs: List<Pair<String?, String>> = listOf<Pair<String?, String>>(null to "الكل") + Regions.all.map { it.id to it.nameAr }
+    val selected = tabs.indexOfFirst { it.first == selectedRegionId }.coerceAtLeast(0)
+    ScrollableTabRow(
+        selectedTabIndex = selected,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        edgePadding = 8.dp,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.primary
     ) {
-        item(key = "all") {
-            FilterChip(
-                selected = selectedRegionId == null,
-                onClick = { onRegionSelected(null) },
-                label = { Text(text = "الكل") },
-                colors = chipColors
-            )
-        }
-        items(Regions.all, key = { it.id }) { region ->
-            FilterChip(
-                selected = selectedRegionId == region.id,
-                onClick = { onRegionSelected(region.id) },
-                label = { Text(text = region.nameAr) },
-                colors = chipColors
+        tabs.forEachIndexed { i, (id, label) ->
+            Tab(
+                selected = i == selected,
+                onClick = { onRegionSelected(id) },
+                text = { Text(label, maxLines = 1, fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal) }
             )
         }
     }

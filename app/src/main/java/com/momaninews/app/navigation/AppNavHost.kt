@@ -43,7 +43,13 @@ fun AppNavHost() {
                 onNewsClick = { newsId ->
                     navController.navigate(Routes.newsDetail(newsId))
                 },
-                onProfileClick = { navController.navigate(Routes.PROFILE) }
+                onProfileClick = { navController.navigate(Routes.PROFILE) },
+                onNotificationsClick = { navController.navigate(Routes.NOTIFICATIONS) },
+                onAdRequestClick = { navController.navigate(Routes.AD_REQUEST) },
+                onVerificationClick = { navController.navigate(Routes.VERIFICATION) },
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
+                onAdminClick = { navController.navigate(Routes.ADMIN) },
+                onSignInClick = { navController.navigate(Routes.SIGN_IN) }
             )
         }
         composable(
