@@ -139,6 +139,11 @@ fun HomeScreen(
                             }
                             if (state.canLoadMore) {
                                 item(key = "load-more") {
+                                    // يُركَّب هذا العنصر فقط عند الوصول لنهاية القائمة، فيبدأ التحميل تلقائياً عند التمرير.
+                                    // عند الفشل لا نعيد المحاولة تلقائياً (يبقى الزر للمحاولة اليدوية).
+                                    androidx.compose.runtime.LaunchedEffect(visibleNews.size) {
+                                        if (!state.loadMoreFailed) viewModel.loadMore()
+                                    }
                                     androidx.compose.material3.OutlinedButton(
                                         onClick = viewModel::loadMore,
                                         enabled = !state.isLoadingMore,
