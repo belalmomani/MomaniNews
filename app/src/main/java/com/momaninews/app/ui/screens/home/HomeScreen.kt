@@ -122,14 +122,14 @@ fun HomeScreen(
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            contentPadding = PaddingValues(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             item(key = "demo-banner") {
-                                DemoBanner()
+                                Box(Modifier.padding(horizontal = 16.dp)) { DemoBanner() }
                             }
                             item(key = "active-ads") {
-                                ActiveAdsSection()
+                                Box(Modifier.padding(horizontal = 16.dp)) { ActiveAdsSection() }
                             }
                             items(visibleNews, key = { it.id }) { news ->
                                 NewsCard(
@@ -147,7 +147,7 @@ fun HomeScreen(
                                     androidx.compose.material3.OutlinedButton(
                                         onClick = viewModel::loadMore,
                                         enabled = !state.isLoadingMore,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                                     ) {
                                         Text(
                                             when {
