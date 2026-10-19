@@ -9,6 +9,8 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val AD_REQUEST = "ad_request"
     const val SETTINGS = "settings"
+    const val POST_NEW = "post/new"
+    const val MY_POSTS = "my_posts"
     const val ADMIN = "admin"
     const val ADMIN_NEWS = "admin/news"
     const val ADMIN_ADD_NEWS = "admin/addnews"

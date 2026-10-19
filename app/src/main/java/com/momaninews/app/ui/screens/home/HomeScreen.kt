@@ -72,6 +72,8 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {},
     onAdminClick: () -> Unit = {},
     onSignInClick: () -> Unit = {},
+    onComposeClick: () -> Unit = {},
+    onMyPostsClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val auth = AuthRepositories.default
@@ -96,6 +98,7 @@ fun HomeScreen(
                         DrawerAction.HOME -> viewModel.onRegionSelected(null)
                         DrawerAction.REGION -> viewModel.onRegionSelected(e.regionId)
                         DrawerAction.NOTIFICATIONS -> onNotificationsClick()
+                        DrawerAction.MY_POSTS -> onMyPostsClick()
                         DrawerAction.AD_REQUEST -> onAdRequestClick()
                         DrawerAction.VERIFICATION -> onVerificationClick()
                         DrawerAction.SETTINGS -> onSettingsClick()
@@ -180,10 +183,17 @@ fun HomeScreen(
                         onRetry = viewModel::retry
                     )
 
-                    visibleNews.isEmpty() -> EmptyState(
-                        hasActiveFilter = state.hasActiveFilter,
-                        onClearFilters = viewModel::clearFilters
-                    )
+                    visibleNews.isEmpty() -> Column(modifier = Modifier.fillMaxSize()) {
+                        // حتى بلا أخبار يستطيع المستخدم نشر أول خبر
+                        com.momaninews.app.ui.components.ComposerEntry(
+                            displayName = user?.displayName,
+                            onClick = { if (user == null) onSignInClick() else onComposeClick() }
+                        )
+                        EmptyState(
+                            hasActiveFilter = state.hasActiveFilter,
+                            onClearFilters = viewModel::clearFilters
+                        )
+                    }
 
                     else -> PullToRefreshBox(
                         isRefreshing = state.isRefreshing,
@@ -195,6 +205,19 @@ fun HomeScreen(
                             contentPadding = PaddingValues(vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            item(key = "composer") {
+                                com.momaninews.app.ui.components.ComposerEntry(
+                                    displayName = user?.displayName,
+                                    onClick = { if (user == null) onSignInClick() else onComposeClick() }
+                                )
+                            }
+                            item(key = "featured") {
+                                com.momaninews.app.ui.components.FeaturedStrip(
+                                    items = state.featured,
+                                    onNewsClick = onNewsClick,
+                                    onCreateClick = { if (user == null) onSignInClick() else onComposeClick() }
+                                )
+                            }
                             item(key = "demo-banner") {
                                 Box(Modifier.padding(horizontal = 16.dp)) { DemoBanner() }
                             }

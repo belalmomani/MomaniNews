@@ -49,6 +49,20 @@ fun AppNavHost() {
                 onVerificationClick = { navController.navigate(Routes.VERIFICATION) },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 onAdminClick = { navController.navigate(Routes.ADMIN) },
+                onSignInClick = { navController.navigate(Routes.SIGN_IN) },
+                onComposeClick = { navController.navigate(Routes.POST_NEW) },
+                onMyPostsClick = { navController.navigate(Routes.MY_POSTS) }
+            )
+        }
+        composable(Routes.POST_NEW) {
+            com.momaninews.app.ui.screens.posts.PostComposerScreen(
+                onBack = { navController.popBackStack() },
+                onSignInClick = { navController.navigate(Routes.SIGN_IN) }
+            )
+        }
+        composable(Routes.MY_POSTS) {
+            com.momaninews.app.ui.screens.posts.MyPostsScreen(
+                onBack = { navController.popBackStack() },
                 onSignInClick = { navController.navigate(Routes.SIGN_IN) }
             )
         }

@@ -20,6 +20,7 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val allNews: List<NewsItem> = emptyList(),
+    val featured: List<NewsItem> = emptyList(),
     val errorMessage: String? = null,
     val isLoadingMore: Boolean = false,
     val canLoadMore: Boolean = false,
@@ -98,11 +99,14 @@ class HomeViewModel(
         loadJob = viewModelScope.launch {
             try {
                 val items = repository.getNews()
+                // الشريط اختياري: فشله لا يمنع عرض الأخبار
+                val featured = try { repository.getFeatured() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
                         allNews = items,
+                        featured = featured ?: it.featured,
                         canLoadMore = items.size >= repository.pageSize,
                         loadMoreFailed = false,
                         errorMessage = null

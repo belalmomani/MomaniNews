@@ -145,12 +145,20 @@ object AdminParser {
         return List(a.length()) { i ->
             val r = a.getJSONObject(i)
             val region = r.optJSONObject("regions")?.optString("name_ar", "") ?: ""
+            val userPost = !r.isNull("author_id")
             AdminItem(
                 ref = r.get("id").toString(),
                 title = str(r, "title"),
-                meta = listOf(region, str(r, "source_name"), date(r, "created_at")).filter { it.isNotBlank() }.joinToString(" • "),
-                body = listOf(str(r, "excerpt"), fetchInfo(r)).filter { it.isNotBlank() }.joinToString("\n\n"),
-                extra = str(r, "excerpt")
+                meta = listOf(region, str(r, "source_name"), if (userPost) "منشور مستخدم" else "", if (r.optBoolean("is_featured", false)) "★ مميّز" else "", date(r, "created_at"))
+                    .filter { it.isNotBlank() }.joinToString(" • "),
+                body = listOf(
+                    str(r, "excerpt"),
+                    if (userPost) str(r, "content") else "",
+                    if (userPost) str(r, "image_url").takeIf { it.isNotBlank() }?.let { "الصورة: $it" } ?: "" else "",
+                    fetchInfo(r)
+                ).filter { it.isNotBlank() }.joinToString("\n\n"),
+                extra = str(r, "excerpt"),
+                flag = r.optBoolean("is_featured", false)
             )
         }
     }
@@ -283,12 +291,15 @@ class AdminRepository(
     }
 
     // ---- الأخبار
-    suspend fun pendingNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
-    suspend fun allNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,created_at,regions(name_ar)&status=neq.pending&order=created_at.desc&limit=50"))
+    suspend fun pendingNews() = AdminParser.news(get("news?select=id,title,excerpt,content,image_url,author_id,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
+    suspend fun allNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,author_id,is_featured,created_at,regions(name_ar)&status=neq.pending&order=created_at.desc&limit=50"))
     suspend fun setNewsStatus(ref: String, status: String) {
         require(status in listOf("approved", "rejected", "archived"))
         write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("status", status))
     }
+    /** تمييز الخبر في شريط «أبرز الأخبار» أو إلغاء التمييز. */
+    suspend fun setNewsFeatured(ref: String, featured: Boolean) =
+        write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_featured", featured))
     /** رفض مع سبب يُحفظ في review_note (يراه المشرفون فقط). */
     suspend fun rejectNews(ref: String, reason: String) {
         val note = reason.trim().take(500)

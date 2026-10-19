@@ -19,12 +19,12 @@ class DrawerLogicTest {
         assertEquals(DrawerAction.HOME, a.first())
         assertEquals(4, a.count { it == DrawerAction.REGION })
         assertTrue(DrawerAction.SIGN_IN in a); assertFalse(DrawerAction.SIGN_OUT in a)
-        assertFalse(DrawerAction.NOTIFICATIONS in a); assertFalse(DrawerAction.ADMIN in a)
+        assertFalse(DrawerAction.NOTIFICATIONS in a); assertFalse(DrawerAction.ADMIN in a); assertFalse(DrawerAction.MY_POSTS in a)
     }
 
     @Test fun userSeesAccountToolsButNotAdmin() {
         val a = actions(user())
-        assertTrue(DrawerAction.NOTIFICATIONS in a); assertTrue(DrawerAction.AD_REQUEST in a)
+        assertTrue(DrawerAction.NOTIFICATIONS in a); assertTrue(DrawerAction.AD_REQUEST in a); assertTrue(DrawerAction.MY_POSTS in a)
         assertTrue(DrawerAction.VERIFICATION in a); assertTrue(DrawerAction.SIGN_OUT in a)
         assertFalse(DrawerAction.ADMIN in a)
     }

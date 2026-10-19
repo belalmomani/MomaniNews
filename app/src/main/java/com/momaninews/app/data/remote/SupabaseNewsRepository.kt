@@ -13,6 +13,7 @@ private const val CONNECT_TIMEOUT_MS = 10_000
 private const val READ_TIMEOUT_MS = 15_000
 private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 private const val PAGE_SIZE = 50
+private const val FEATURED_LIMIT = 10
 
 /**
  * يقرأ الأخبار من Supabase (PostgREST) عبر HTTPS بالمفتاح العام فقط، بدون مكتبة خارجية.
@@ -39,6 +40,19 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
         val off = offset.coerceAtLeast(0)
         val body = get("news?select=${SupabaseNewsParser.SELECT}&order=published_at.desc&limit=$PAGE_SIZE&offset=$off")
         SupabaseNewsParser.parseList(body)
+    }
+
+    /**
+     * أبرز الأخبار: المعتمدة التي ميّزها المدير (is_featured)، وإن لم يوجد أي منها
+     * فأحدث الأخبار التي لها صورة (حتى لا يبقى الشريط فارغاً).
+     */
+    override suspend fun getFeatured(): List<NewsItem> = withContext(Dispatchers.IO) {
+        val marked = SupabaseNewsParser.parseList(
+            get("news?select=${SupabaseNewsParser.SELECT}&is_featured=eq.true&order=published_at.desc&limit=$FEATURED_LIMIT")
+        )
+        if (marked.isNotEmpty()) marked else SupabaseNewsParser.parseList(
+            get("news?select=${SupabaseNewsParser.SELECT}&image_url=not.is.null&order=published_at.desc&limit=$FEATURED_LIMIT")
+        )
     }
 
     override suspend fun getNewsById(id: Int): NewsItem? = withContext(Dispatchers.IO) {

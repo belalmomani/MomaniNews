@@ -42,7 +42,7 @@ android {
         targetSdk = 35
         // Google Play يشترط زيادة versionCode مع كل رفع؛ يمرّره workflow الإصدار (-PversionCode=رقم التشغيل).
         versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = "0.1.0"
+        versionName = (project.findProperty("versionName") as String?)?.takeIf { Regex("""[0-9A-Za-z.\-]{1,30}""").matches(it) } ?: "0.1.0"
 
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
@@ -72,7 +72,10 @@ android {
     }
 
     buildTypes {
+        // التحديث من الإعدادات: لنسخة التوزيع المباشر (debug الموقّعة بمفتاح ثابت) فقط، وليس لبناء Google Play.
+        debug { buildConfigField("boolean", "IN_APP_UPDATE", "true") }
         release {
+            buildConfigField("boolean", "IN_APP_UPDATE", "false")
             if (releaseKeystorePath != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true

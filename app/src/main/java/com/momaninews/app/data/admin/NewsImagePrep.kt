@@ -23,12 +23,12 @@ object NewsImagePrep {
         return s
     }
 
-    fun toJpeg(context: Context, uri: Uri): ByteArray? {
+    fun toJpeg(context: Context, uri: Uri, maxSide: Int = MAX_SIDE, maxBytes: Int = MAX_BYTES): ByteArray? {
         val resolver = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight) }
+        val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, maxSide) }
         val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
 
         val rotation = try {
@@ -55,7 +55,7 @@ object NewsImagePrep {
             out.reset()
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             quality -= 12
-        } while (out.size() > MAX_BYTES && quality > 25)
-        return if (out.size() in 1..MAX_BYTES) out.toByteArray() else null
+        } while (out.size() > maxBytes && quality > 25)
+        return if (out.size() in 1..maxBytes) out.toByteArray() else null
     }
 }

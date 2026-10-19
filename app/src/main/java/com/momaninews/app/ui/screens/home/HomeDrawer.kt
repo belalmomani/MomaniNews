@@ -26,7 +26,7 @@ import com.momaninews.app.data.model.Regions
 import com.momaninews.app.data.model.User
 import com.momaninews.app.data.model.VerificationStatus
 
-enum class DrawerAction { HOME, REGION, NOTIFICATIONS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
+enum class DrawerAction { HOME, REGION, NOTIFICATIONS, MY_POSTS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
 
 data class DrawerEntry(val action: DrawerAction, val label: String, val regionId: String? = null)
 
@@ -38,6 +38,7 @@ object DrawerLogic {
         Regions.all.forEach { add(DrawerEntry(DrawerAction.REGION, it.nameAr, it.id)) }
         if (user != null) {
             add(DrawerEntry(DrawerAction.NOTIFICATIONS, "الإشعارات"))
+            add(DrawerEntry(DrawerAction.MY_POSTS, "منشوراتي"))
             add(DrawerEntry(DrawerAction.AD_REQUEST, "أعلن معنا"))
             if (!user.isDemo && user.verification != VerificationStatus.APPROVED) {
                 add(DrawerEntry(DrawerAction.VERIFICATION, if (user.verification == VerificationStatus.NONE) "طلب التوثيق" else "حالة طلب التوثيق"))

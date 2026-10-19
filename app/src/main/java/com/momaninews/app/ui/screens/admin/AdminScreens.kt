@@ -103,7 +103,8 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                     AdminAction("حذف", danger = true, confirm = "حذف المصدر؟ (الأخبار المرتبطة به تبقى)") { i, _ -> r.deleteSource(i.ref) }
                 )
             },
-            AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { listOf(
+            AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { n -> listOf(
+                AdminAction(if (n.flag) "إلغاء التمييز" else "تمييز في أبرز الأخبار") { i, _ -> r.setNewsFeatured(i.ref, !i.flag) },
                 AdminAction("أرشفة", confirm = "أرشفة الخبر (يختفي من التطبيق)؟") { i, _ -> r.setNewsStatus(i.ref, "archived") },
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },
                 AdminAction("حذف", danger = true, confirm = "حذف الخبر نهائياً؟") { i, _ -> r.deleteNews(i.ref) }

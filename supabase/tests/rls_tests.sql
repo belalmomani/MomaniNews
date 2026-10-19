@@ -60,6 +60,7 @@ declare
   ub uuid := 'bbbbbbbb-0000-0000-0000-000000000002';
   uc uuid := 'cccccccc-0000-0000-0000-000000000003';  -- admin
   ud uuid := 'dddddddd-0000-0000-0000-000000000004';  -- banned
+  ue uuid := 'eeeeeeee-0000-0000-0000-000000000005';  -- كاتب منشورات
   n_ok bigint; n_pend bigint; n_rej bigint; n_future bigint;
   anon text := 'anon'; au text := 'authenticated'; sr text := 'service_role'; su text := current_user;
   i int; v text; fails text; total int;
@@ -362,6 +363,104 @@ begin
   perform t.chk('approval: القيمة لم تتغير', t.sel(null, su, format('select (approved_by=%L)::text from public.news where title=''ب1''', uc)), 'true');
   perform t.chk('approval: الإرجاع للأرشيف يمسحها', t.dml(uc, au, 'update public.news set status=''archived'' where title=''ب1'''), '1');
   perform t.chk('approval: مُسحت', t.sel(null, su, 'select (approved_by is null and approved_at is null)::text from public.news where title=''ب1'''), 'true');
+
+  -- ---------- منشورات المستخدمين وأبرز الأخبار ----------
+  insert into auth.users (id, email, raw_user_meta_data) values (ue, 'e@test.local', '{"name":"كاتب"}');
+  create temp table t_names as select id, display_name from public.users;
+  grant select on t_names to anon, authenticated;
+  perform t.chk('post: المستخدم يرسل منشوراً معلّقاً',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'منشور أ1', 'نص منشور أ1', 'abeen', %L, display_name from t_names where id = %L$q$, ue, ue)), '1');
+  perform t.chk('post: يدخل بحالة pending', t.sel(null, su, $q$select status::text from public.news where title='منشور أ1'$q$), 'pending');
+  perform t.chk('post: لا يظهر للزائر', t.sel(null, anon, $q$select count(*) from public.news where title='منشور أ1'$q$), '0');
+  perform t.chk('post: لا يظهر لمستخدم آخر', t.sel(ub, au, $q$select count(*) from public.news where title='منشور أ1'$q$), '0');
+  perform t.chk('post: لا يظهر لكاتبه مباشرةً (لا ملاحظات إدارية)', t.sel(ue, au, $q$select count(*) from public.news where title='منشور أ1'$q$), '0');
+  perform t.chk('post: my_posts يعيد حالته لكاتبه', t.sel(ue, au, $q$select count(*) from public.my_posts() where title='منشور أ1' and status='pending'$q$), '1');
+  perform t.chk('post: my_posts لا يعيد منشور غيره', t.sel(ub, au, 'select count(*) from public.my_posts()'), '0');
+  perform t.chk('post: my_posts مرفوضة للزائر', t.sel(null, anon, 'select count(*) from public.my_posts()'), 'ERR:42501');
+  perform t.chk('post: الزائر لا يرسل',
+    t.dml(null, anon, $q$insert into public.news (title, content, region_id) values ('x','y','abeen')$q$), 'ERR:42501');
+  perform t.chk('post: لا يُنشر معتمداً مباشرة',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, status, published_at)
+      select 'ن2', 'ن2', 'abeen', %L, display_name, 'approved', now() from t_names where id = %L$q$, ue, ue)), 'ERR:42501');
+  perform t.chk('post: لا ينسب المنشور لغيره',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'ن3', 'ن3', 'abeen', %L, display_name from t_names where id = %L$q$, ub, ub)), 'ERR:42501');
+  perform t.chk('post: لا ينتحل اسماً',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name) values ('ن4','ن4','abeen',%L,'الغد')$q$, ue)), 'ERR:42501');
+  perform t.chk('post: لا يضع is_featured',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, is_featured)
+      select 'ن5', 'ن5', 'abeen', %L, display_name, true from t_names where id = %L$q$, ue, ue)), 'ERR:42501');
+  perform t.chk('post: لا يضع رابطاً أصلياً',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, original_url)
+      select 'ن6', 'ن6', 'abeen', %L, display_name, 'https://x.y/z' from t_names where id = %L$q$, ue, ue)), 'ERR:42501');
+  perform t.chk('post: صورة خارج مجلده مرفوضة',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, image_url)
+      select 'ن7', 'ن7', 'abeen', %L, display_name, 'https://p.supabase.co/storage/v1/object/public/user-posts/' || %L || '/a.jpg' from t_names where id = %L$q$, ue, ub, ue)), 'ERR:42501');
+  perform t.chk('post: صورة من مجلده مقبولة',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, image_url)
+      select 'منشور أ2', 'ن8', 'abeen', %L, display_name, 'https://p.supabase.co/storage/v1/object/public/user-posts/' || %L || '/a.jpg' from t_names where id = %L$q$, ue, ue, ue)), '1');
+  perform t.chk('post: نص أطول من 5000 مرفوض',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'ن9', repeat('ك', 5001), 'abeen', %L, display_name from t_names where id = %L$q$, ue, ue)), 'ERR:42501');
+  perform t.chk('post: منطقة غير موجودة مرفوضة',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'ن10', 'ن10', 'nowhere', %L, display_name from t_names where id = %L$q$, ue, ue)), 'ERR:23503');
+  perform t.chk('post: المحظور لا يرسل',
+    t.dml(ud, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'ن11', 'ن11', 'abeen', %L, display_name from t_names where id = %L$q$, ud, ud)), 'ERR:42501');
+  perform t.chk('post: المستخدم لا يعدّل الأخبار', t.dml(ue, au, $q$update public.news set title='hack' where title='منشور أ1'$q$), '0');
+  perform t.chk('post: المستخدم لا يحذف الأخبار', t.dml(ue, au, $q$delete from public.news where title='منشور أ1'$q$), '0');
+  for i in 1..3 loop
+    perform t.chk('post: ملء حد المعلّقة ' || i,
+      t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+        select 'حد %s', 'ن', 'abeen', %L, display_name from t_names where id = %L$q$, i, ue, ue)), '1');
+  end loop;
+  perform t.chk('post: السادس المعلّق مرفوض',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'حد 6', 'ن', 'abeen', %L, display_name from t_names where id = %L$q$, ue, ue)), 'ERR:P0001');
+  perform t.chk('post: الأدمن يعتمد منشور المستخدم', t.dml(uc, au, $q$update public.news set status='approved' where title='منشور أ1'$q$), '1');
+  perform t.chk('post: يظهر للعامة بعد الاعتماد', t.sel(null, anon, $q$select count(*) from public.news where title='منشور أ1'$q$), '1');
+  perform t.chk('post: الكاتب تلقّى إشعار النشر',
+    t.sel(ue, au, $q$select count(*) from public.notifications where title='تم نشر منشورك' and news_id is not null$q$), '1');
+  perform t.chk('post: الأدمن يرفض منشوراً', t.dml(uc, au, $q$update public.news set status='rejected', review_note='سبب داخلي' where title='منشور أ2'$q$), '1');
+  perform t.chk('post: الكاتب تلقّى إشعار الرفض', t.sel(ue, au, $q$select count(*) from public.notifications where title='لم يُنشر منشورك'$q$), '1');
+  perform t.chk('post: إشعار الرفض لا يحوي السبب الداخلي', t.sel(ue, au, $q$select count(*) from public.notifications where body like '%سبب داخلي%'$q$), '0');
+  perform t.chk('post: my_posts تعرض الحالات',
+    t.sel(ue, au, $q$select string_agg(status::text, ',' order by title) from public.my_posts() where title in ('منشور أ1','منشور أ2')$q$), 'approved,rejected');
+  perform t.chk('post: أرشفة المعتمد', t.dml(uc, au, $q$update public.news set status='archived' where title='منشور أ1'$q$), '1');
+  perform t.chk('post: لا إشعار ثانٍ بعد الأرشفة', t.sel(ue, au, $q$select count(*) from public.notifications where title='تم نشر منشورك'$q$), '1');
+  update public.news set status = 'archived' where author_id is not null and status = 'pending';
+  insert into public.news (title, content, region_id, author_id, source_name, status)
+    select 'أرشيف ' || g, 'ن', 'abeen', ue, 'x', 'archived' from generate_series(1, 4) g;
+  perform t.chk('post: العاشر اليوم يُقبل',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'يوم 1', 'ن', 'abeen', %L, display_name from t_names where id = %L$q$, ue, ue)), '1');
+  perform t.chk('post: الحادي عشر يُرفض (حد اليوم)',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name)
+      select 'يوم 2', 'ن', 'abeen', %L, display_name from t_names where id = %L$q$, ue, ue)), 'ERR:P0001');
+  perform t.chk('post: الأدمن غير مقيّد بالحد',
+    t.dml(uc, au, $q$insert into public.news (title, content, region_id, status, published_at) values ('أدمن', 'ن', 'abeen', 'approved', now())$q$), '1');
+  perform t.chk('featured: المستخدم لا يميّز', t.dml(ue, au, $q$update public.news set is_featured=true where title='خبر معتمد'$q$), '0');
+  perform t.chk('featured: الأدمن يميّز', t.dml(uc, au, $q$update public.news set is_featured=true where title='خبر معتمد'$q$), '1');
+  perform t.chk('featured: يقرأه الزائر', t.sel(null, anon, 'select count(*) from public.news where is_featured'), '1');
+  perform t.chk('user-posts: رفع إلى مجلده', t.dml(ue, au, format('insert into storage.objects (bucket_id,name) values (''user-posts'', %L)', ue || '/p1.jpg')), '1');
+  perform t.chk('user-posts: رفع إلى مجلد غيره مرفوض', t.dml(ue, au, format('insert into storage.objects (bucket_id,name) values (''user-posts'', %L)', ub || '/p1.jpg')), 'ERR:42501');
+  perform t.chk('user-posts: الزائر مرفوض', t.dml(null, anon, $q$insert into storage.objects (bucket_id,name) values ('user-posts', 'x/p.jpg')$q$), 'ERR:42501');
+  perform t.chk('user-posts: المحظور مرفوض', t.dml(ud, au, format('insert into storage.objects (bucket_id,name) values (''user-posts'', %L)', ud || '/p1.jpg')), 'ERR:42501');
+  perform t.chk('user-posts: القراءة عامة', t.sel(null, anon, $q$select count(*) from storage.objects where bucket_id='user-posts'$q$), '1');
+  perform t.chk('user-posts: الحاوية عامة وJPEG وحد 3MB',
+    t.sel(null, su, $q$select (public and file_size_limit=3145728 and allowed_mime_types=array['image/jpeg'])::text from storage.buckets where id='user-posts'$q$), 'true');
+  for i in 2..30 loop
+    perform t.dml(ue, au, format('insert into storage.objects (bucket_id,name) values (''user-posts'', %L)', ue || '/p' || i || '.jpg'));
+  end loop;
+  perform t.chk('user-posts: بلغ 30 ملفاً فيُرفض التالي', t.dml(ue, au, format('insert into storage.objects (bucket_id,name) values (''user-posts'', %L)', ue || '/p31.jpg')), 'ERR:42501');
+  perform t.chk('user-posts: لا يحذف ملف غيره', t.dml(ub, au, format('delete from storage.objects where bucket_id=''user-posts'' and name=%L', ue || '/p1.jpg')), '0');
+  perform t.chk('user-posts: يحذف ملفه', t.dml(ue, au, format('delete from storage.objects where bucket_id=''user-posts'' and name=%L', ue || '/p1.jpg')), '1');
+  perform t.chk('user-posts: الأدمن يحذف أي ملف', t.dml(uc, au, format('delete from storage.objects where bucket_id=''user-posts'' and name=%L', ue || '/p2.jpg')), '1');
+
+  delete from auth.users where id = ue;
+  perform t.chk('post: حذف الحساب يحذف منشورات الكاتب (cascade)', t.sel(null, su, format('select count(*) from public.news where author_id=%L', ue)), '0');
 
   -- ---------- حذف الحساب الذاتي ----------
   perform t.chk('delete_my_account: الزائر مرفوض', t.sel(null, anon, 'select public.delete_my_account()'), 'ERR:42501');

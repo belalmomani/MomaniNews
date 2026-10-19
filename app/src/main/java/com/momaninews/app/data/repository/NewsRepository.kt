@@ -13,6 +13,9 @@ interface NewsRepository {
     /** صفحة تبدأ من [offset]. الافتراضي: الصفحة الأولى فقط. */
     suspend fun getNews(offset: Int): List<NewsItem> = if (offset == 0) getNews() else emptyList()
 
+    /** «أبرز الأخبار» لشريط الرئيسية. الافتراضي: لا شيء. */
+    suspend fun getFeatured(): List<NewsItem> = emptyList()
+
     /** حجم الصفحة؛ إن رجع أقل منه فلا يوجد المزيد. */
     val pageSize: Int get() = Int.MAX_VALUE
 }

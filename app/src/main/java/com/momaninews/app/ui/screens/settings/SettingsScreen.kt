@@ -92,6 +92,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             HorizontalDivider()
+            if (BuildConfig.IN_APP_UPDATE) {
+                UpdateSection()
+                HorizontalDivider()
+            }
             if (BuildConfig.PRIVACY_URL.startsWith("https://")) {
                 OutlinedButton(
                     onClick = {
