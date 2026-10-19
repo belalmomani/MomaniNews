@@ -19,7 +19,15 @@
         <!-- معرّف تطبيق Start.io (معرّف عام وليس سراً). التهيئة التلقائية من الـ manifest هي الطريقة الموصى بها. -->
         <meta-data
             android:name="com.startapp.sdk.APPLICATION_ID"
-            android:value="209630332" />
+            android:value="209209297" />
+
+        <service
+            android:name=".data.notifications.MomaniMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".MainActivity"

@@ -186,7 +186,7 @@ class AdminLogicTest {
         assertTrue(b.needsContext); assertEquals("صخرة", b.word)
         val c = AdminRules.parseKeywordInput("exclude قبة الصخرة")!!
         assertEquals("قبة الصخرة", c.word); assertNull(c.regionId)
-        assertNull(AdminRules.parseKeywordInput("region عبين"))      // المنطقة إلزامية
+        assertNull(AdminRules.parseKeywordInput("region مالطا"))      // المنطقة إلزامية ولا يمكن استنتاجها
         assertNull(AdminRules.parseKeywordInput("bogus كلمة"))
         assertNull(AdminRules.parseKeywordInput("name"))
     }

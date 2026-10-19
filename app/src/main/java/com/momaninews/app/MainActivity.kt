@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
                 .launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        com.momaninews.app.data.notifications.PushTopics.sync(this)
         setContent {
             MomaniNewsTheme {
                 AppNavHost()

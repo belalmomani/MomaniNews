@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 // Supabase: الرابط والمفتاح العام (publishable/anon) عامّان بطبيعتهما ومصمَّمان للوجود داخل التطبيق؛
@@ -121,6 +122,8 @@ dependencies {
     implementation(libs.startapp.inapp.sdk)
     implementation(libs.coil.compose)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

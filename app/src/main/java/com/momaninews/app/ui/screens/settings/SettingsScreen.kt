@@ -84,7 +84,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             var pushOn by remember { mutableStateOf(PushPrefs.isEnabled(context)) }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("إشعارات الأخبار على الهاتف", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground)
-                Switch(checked = pushOn, onCheckedChange = { pushOn = it; PushPrefs.setEnabled(context, it) })
+                Switch(checked = pushOn, onCheckedChange = { pushOn = it; PushPrefs.setEnabled(context, it); com.momaninews.app.data.notifications.PushTopics.sync(context) })
             }
             Text(
                 "تصلك الإشعارات بعد تسجيل الدخول، وقد تتأخر حتى ربع ساعة أو أكثر.",
