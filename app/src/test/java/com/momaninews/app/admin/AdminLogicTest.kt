@@ -207,4 +207,16 @@ class AdminLogicTest {
         assertNull(AdminRules.parseSourceInput(" | https://a.example/feed"))
         assertNull(AdminRules.parseSourceInput("م | https://a.example/fe ed"))
     }
+
+    @Test fun keywordInputArabicAndInferred() {
+        val a = AdminRules.parseKeywordInput("region عبين")!!   // المنطقة تُستنتج من الكلمة
+        assertEquals("abeen", a.regionId)
+        val b = AdminRules.parseKeywordInput("استبعاد قبة الصخرة")!!
+        assertEquals("exclude", b.kind)
+        val c = AdminRules.parseKeywordInput("سياق كفرنجة")!!
+        assertEquals("context", c.kind); assertEquals("كفرنجة", c.word)
+        val d = AdminRules.parseKeywordInput("منطقة صخرة ctx")!!
+        assertEquals("region", d.kind); assertEquals("sakhra", d.regionId); assertTrue(d.needsContext)
+        assertNull(AdminRules.parseKeywordInput("region مالطا"))   // لا يمكن استنتاج المنطقة
+    }
 }

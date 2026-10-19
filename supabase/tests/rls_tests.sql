@@ -354,6 +354,15 @@ begin
   perform t.chk('fetch: news_refs للأدمن فقط', t.sel(ua, au, 'select count(*) from public.news_refs'), '0');
   perform t.chk('fetch: الزائر لا يقرأ news_refs', t.sel(null, anon, 'select count(*) from public.news_refs'), 'ERR:42501');
 
+  -- ---------- تدقيق الاعتماد ----------
+  perform t.chk('approval: خبر معلّق بلا معتمِد', t.sel(null, su, 'select (approved_by is null and approved_at is null)::text from public.news where title=''ب1'''), 'true');
+  perform t.chk('approval: الأدمن يعتمد', t.dml(uc, au, 'update public.news set status=''approved'' where title=''ب1'''), '1');
+  perform t.chk('approval: سُجّل المعتمِد', t.sel(null, su, format('select (approved_by=%L and approved_at is not null)::text from public.news where title=''ب1''', uc)), 'true');
+  perform t.chk('approval: لا تزوير للمعتمِد', t.dml(uc, au, format('update public.news set approved_by=%L where title=''ب1''', ub)), '1');
+  perform t.chk('approval: القيمة لم تتغير', t.sel(null, su, format('select (approved_by=%L)::text from public.news where title=''ب1''', uc)), 'true');
+  perform t.chk('approval: الإرجاع للأرشيف يمسحها', t.dml(uc, au, 'update public.news set status=''archived'' where title=''ب1'''), '1');
+  perform t.chk('approval: مُسحت', t.sel(null, su, 'select (approved_by is null and approved_at is null)::text from public.news where title=''ب1'''), 'true');
+
   -- ---------- حذف الحساب الذاتي ----------
   perform t.chk('delete_my_account: الزائر مرفوض', t.sel(null, anon, 'select public.delete_my_account()'), 'ERR:42501');
   perform t.chk('delete_my_account: الأدمن الوحيد مرفوض', t.sel(uc, au, 'select public.delete_my_account()'), 'ERR:P0001');

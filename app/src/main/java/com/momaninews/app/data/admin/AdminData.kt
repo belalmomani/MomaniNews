@@ -55,19 +55,34 @@ object AdminRules {
         "region" -> "منطقة"; "alias" -> "اسم بديل"; "name" -> "اسم شخص"; "context" -> "سياق"; "exclude" -> "استبعاد"; else -> kind
     }
     private val REGION_IDS = setOf("abeen", "abelin", "sakhra", "momani")
-    /** «النوع الكلمة [المنطقة] [ctx]»؛ المنطقة إلزامية لـ region/alias، وctx تعني «تحتاج سياق». */
+    private val REGION_NAMES = mapOf(
+        "عبين" to "abeen", "عبلين" to "abelin", "صخرة" to "sakhra", "صخره" to "sakhra",
+        "المومني" to "momani", "مومني" to "momani", "أخبار المومني" to "momani"
+    )
+    private val KIND_NAMES = mapOf(
+        "منطقة" to "region", "اسم_بديل" to "alias", "بديل" to "alias", "اسم" to "name",
+        "سياق" to "context", "استبعاد" to "exclude", "استبعد" to "exclude"
+    )
+    /**
+     * «النوع الكلمة [المنطقة] [ctx]». النوع بالإنجليزية (region/alias/name/context/exclude) أو بالعربية (منطقة/بديل/اسم/سياق/استبعاد).
+     * المنطقة (abeen/abelin/sakhra/momani) إلزامية لـ region/alias، وتُستنتج من الكلمة إن كانت اسم منطقة (عبين/عبلين/صخرة).
+     * ctx تعني «تحتاج سياقاً».
+     */
     fun parseKeywordInput(text: String): KeywordInput? {
         val parts = text.trim().split(Regex("\\s+")).toMutableList()
         if (parts.size < 2) return null
-        val kind = parts.removeAt(0).lowercase()
+        val first = parts.removeAt(0)
+        val kind = (KIND_NAMES[first] ?: first.lowercase())
         if (kind !in KEYWORD_KINDS) return null
         val ctx = parts.remove("ctx")
-        val region = parts.lastOrNull()?.takeIf { it in REGION_IDS }?.also { parts.removeAt(parts.size - 1) }
+        var region = parts.lastOrNull()?.takeIf { it in REGION_IDS }?.also { parts.removeAt(parts.size - 1) }
         val word = parts.joinToString(" ").trim()
         if (word.isEmpty() || word.length > 80) return null
+        if ((kind == "region" || kind == "alias") && region == null) region = REGION_NAMES[word]
         if ((kind == "region" || kind == "alias") && region == null) return null
         return KeywordInput(kind, word, region, ctx)
     }
+
     /** مدة الإعلان المسموحة بالأيام (نفس لوحة الويب). null إن كانت غير صالحة. */
     fun parseDays(text: String?): Int? = text?.trim()?.toIntOrNull()?.takeIf { it in 1..365 }
 
@@ -330,7 +345,7 @@ class AdminRepository(
     }
     /** الإدخال: «النوع الكلمة [رقم المنطقة]» مثل: region عبين abeen */
     suspend fun addKeyword(input: String) {
-        val p = AdminRules.parseKeywordInput(input) ?: throw IOException("الصيغة: النوع الكلمة [المنطقة] — النوع: region/alias/name/context/exclude")
+        val p = AdminRules.parseKeywordInput(input) ?: throw IOException("لم تُفهم الصيغة. اكتب: النوع ثم الكلمة ثم المنطقة. مثال: region مالطا abeen — أو بالعربية: استبعاد قبة الصخرة")
         val body = JSONObject().put("word", p.word).put("kind", p.kind).put("needs_context", p.needsContext)
         if (p.regionId != null) body.put("region_id", p.regionId)
         write("POST", "keywords", body)

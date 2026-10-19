@@ -89,7 +89,7 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                 AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") }
             ) },
             AdminTab("عمليات الجلب", "لا توجد عمليات جلب بعد", { r.fetchRuns() }) { emptyList() },
-            AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "الصيغة: النوع الكلمة [المنطقة] [ctx] — مثال: region عبين abeen")) + r.keywords() }) { k ->
+            AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "اكتب: النوع ثم الكلمة ثم المنطقة. أمثلة: region عبين abeen | استبعاد قبة الصخرة | سياق كفرنجة")) + r.keywords() }) { k ->
                 if (k.ref == "add") listOf(AdminAction("إضافة", prompt = "النوع الكلمة [abeen/abelin/sakhra/momani] [ctx]") { _, text -> r.addKeyword(text ?: "") })
                 else listOf(
                     AdminAction(if (k.flag) "تعطيل" else "تفعيل") { i, _ -> r.setKeywordActive(i.ref, !i.flag) },

@@ -19,6 +19,7 @@ from (
   ('20261018100000_comment_reports.sql', 'دالة report_comment',      to_regprocedure('public.report_comment(bigint,text)') is not null),
   ('20261018110000_ad_pause_metrics.sql', 'عمود advertisements.is_paused', exists (select 1 from information_schema.columns where table_schema='public' and table_name='advertisements' and column_name='is_paused')),
   ('20261018110000_ad_pause_metrics.sql', 'دالة track_ad',           to_regprocedure('public.track_ad(bigint,text)') is not null),
-  ('20261018120000_admin_stats.sql', 'دالة admin_stats',             to_regprocedure('public.admin_stats()') is not null)
+  ('20261018120000_admin_stats.sql', 'دالة admin_stats',             to_regprocedure('public.admin_stats()') is not null),
+  ('20261019100000_news_approval_audit.sql', 'عمود news.approved_by', exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='approved_by'))
 ) as c(file, check_name, ok)
 order by file, check_name;

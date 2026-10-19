@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree as ET
 
-MAX_BYTES = 2 * 1024 * 1024
+MAX_BYTES = 6 * 1024 * 1024
 TIMEOUT = 20
 USER_AGENT = "MomaniNewsBot/1.0 (news aggregator; headline+link only)"
 _TAGS = re.compile(r"<[^>]+>")
