@@ -2,12 +2,17 @@
 import os
 import sys
 from collections import Counter
+from urllib.parse import urlparse
 from dataclasses import dataclass, field
 
-from . import dedup, feeds, matcher, pages as pagemod
+from datetime import datetime, timedelta, timezone
+
+from . import dedup, feeds, matcher, pages as pagemod, queries, wpapi
 from .store import StoreError, SupabaseStore
 
-MAX_NEW_PER_SOURCE = 50
+MAX_NEW_PER_SOURCE = 100
+CATCHUP_GAP = timedelta(hours=3)   # انقطاع أطول من هذا ← استدراك (صفحات أكثر) لما فات
+CATCHUP_PAGES = 60
 MAX_ITEMS_PER_FEED = 200
 MAX_PAGES = 5          # حد أقصى لصفحات الخلاصة الأقدم (?paged=n) في وضع الاستكمال
 MAX_REJECT_SAMPLES = 15
@@ -25,6 +30,7 @@ class Stats:
     reject_reasons: Counter = field(default_factory=Counter)
     reject_samples: list[str] = field(default_factory=list)   # عناوين رُفضت بسبب التباس (لمراجعة دقة الفلترة)
     sources: list[dict] = field(default_factory=list)          # تقرير موجز لكل مصدر
+    noted_domains: set = field(default_factory=set)
     errors: list[str] = field(default_factory=list)
 
     def as_row(self) -> dict:
@@ -36,7 +42,7 @@ class Stats:
         return row
 
 
-def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: Stats, fetch=feeds.http_get, pages: int = 1, sleep=None) -> None:
+def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: Stats, fetch=feeds.http_get, pages: int = 1, sleep=None, now: datetime | None = None) -> None:
     sid, name, url = source["id"], source["name"], source["url"]
     rep = {"name": name, "seen": 0, "matched": 0, "inserted": 0, "duplicate": 0, "rejected": 0, "error": None}
     stats.sources.append(rep)
@@ -49,10 +55,22 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
         rep["error"] = "نوع غير مدعوم"
         return
     via_pages = False
+    now = now or datetime.now(timezone.utc)
+    since = feeds.parse_date(source.get("last_success_at"), now)
+    catchup = bool(since and now - since > CATCHUP_GAP)  # انقطع الجلب: نستدرك ما فات
+    if catchup:
+        pages = max(pages, 3)
+        rep["catchup"] = True
     kw = {} if sleep is None else {"sleep": sleep}
+    if catchup:
+        kw["max_pages"] = CATCHUP_PAGES
     seen_lookup = getattr(store, "known_seen_urls", lambda urls: set())
     try:
-        if kind == "html" or (kind == "rss" and "sitemap" in url.lower()):
+        if kind == "html" and wpapi.is_wp_api(url):
+            terms = [k.word for k in keywords if k.kind in ("region", "alias", "name")]
+            items = wpapi.collect(url, fetch, since, terms, max_pages=5 if catchup else 2, now=now)
+            used_url, via_pages = url, True
+        elif kind == "html" or (kind == "rss" and "sitemap" in url.lower()):
             items, _mode = pagemod.collect(store, url, fetch, known_seen=seen_lookup, **kw)
             used_url, via_pages = url, True
         else:
@@ -114,6 +132,18 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
         mark = getattr(store, "mark_seen", None)
         if mark:
             mark([dedup.normalize_url(i.link) for i in items if dedup.normalize_url(i.link)], sid)
+    note = getattr(store, "note_candidate", None)
+    if note:
+        # ناشرون ظهرت لهم أخبار ذات صلة عبر البحث: مرشحون للاكتشاف الآلي (يُفحصون لاحقاً في مهمة الاكتشاف)
+        for it, _m, _n in candidates:
+            if it.publisher_url:
+                host = (urlparse(it.publisher_url).hostname or "").lower().removeprefix("www.")
+                if host and "google." not in host and host not in stats.noted_domains:
+                    stats.noted_domains.add(host)
+                    try:
+                        note(host, "search", True)
+                    except StoreError:
+                        pass
     stats.items_matched += len(candidates)
     rep["matched"] = len(candidates)
 
@@ -163,6 +193,13 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
     stats = Stats()
     run_id = store.start_run(trigger)
     try:
+        # استعلامات البحث الأساسية تُضمن كل دورة (المكرر يُتجاهل) فلا تنتظر مهمة الاكتشاف الأسبوعية
+        ensure = getattr(store, "upsert_sources", None)
+        if ensure:
+            try:
+                ensure(queries.search_source_rows())
+            except StoreError as e:
+                stats.errors.append(f"تسجيل استعلامات البحث: {e}")
         sources = store.active_sources()
         keywords = [matcher.Keyword(k["word"], k["kind"], k.get("region_id"), bool(k.get("needs_context"))) for k in store.active_keywords()]
         stats.sources_total = len(sources)
@@ -195,6 +232,9 @@ def report(stats: Stats) -> str:
         lines.append("- ✅ التشغيل نجح تقنياً، لكن ⚠ لم تُكتشف أخبار جديدة ذات صلة في هذه الدورة")
     else:
         lines.append(f"- ✅ نجح التشغيل وأُضيفت {stats.items_inserted} أخبار بانتظار اعتماد المدير")
+    catch = [s["name"] for s in stats.sources if s.get("catchup")]
+    if catch:
+        lines.append("- استدراك بعد انقطاع (صفحات أكثر): " + "، ".join(catch))
     via = [s["name"] for s in stats.sources if s.get("via")]
     if via:
         lines.append("- مصادر جُلبت عبر sitemap/صفحات (بلا RSS): " + "، ".join(via))

@@ -23,6 +23,7 @@ class FeedItem:
     summary: str
     published: datetime | None
     text: str = ""       # النص الكامل المتاح في الخلاصة (للمطابقة فقط، لا يُخزَّن كاملاً)
+    publisher_url: str = ""  # موقع الناشر الأصلي (سمة url في <source>) لاكتشاف مصادر جديدة
     publisher: str = ""  # اسم الناشر الأصلي إن وفّرته الخلاصة (مثل عنصر <source> في خلاصات البحث)
 
 
@@ -116,7 +117,7 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
                 title = title[: -len(" - " + publisher)].rstrip()
             items.append(FeedItem(title, link.strip(), strip_html(summary, 600),
                                   parse_date(_text(f.get("pubDate")) or _text(f.get("date")), now),
-                                  strip_html(full, MAX_TEXT), publisher))
+                                  strip_html(full, MAX_TEXT), publisher_url=(f["source"].get("url", "") if "source" in f else ""), publisher=publisher))
     elif kind == "feed":
         for n in [e for e in root if _local(e.tag) == "entry"]:
             link = ""

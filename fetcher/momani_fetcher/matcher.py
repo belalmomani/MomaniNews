@@ -24,6 +24,10 @@ CLAN_CONTEXT = (
 )
 
 
+# كلمات سياق عامة لا تكفي مع اسم «المومني» (قد تخص أي بلدية أو قرية في الأردن)
+GENERIC_CONTEXT = {"بلدية", "قرية", "بلدة", "لواء", "محافظة", "مجلس محلي"}
+
+
 @dataclass(frozen=True)
 class Keyword:
     word: str
@@ -68,8 +72,9 @@ def _evaluate(tt: list[str], keywords: list[Keyword]) -> Match:
         return Match(True, region, _uniq(terms), "؛ ".join(notes))
     if name_hits:
         clan_ctx = [c for c in CLAN_CONTEXT if find_phrase(tt, c)]
-        if context_hits or clan_ctx:
-            notes.append("اسم المومني بسياق (" + "، ".join(_uniq(context_hits + clan_ctx)[:4]) + ") — تأكد أنه من العشيرة المقصودة")
+        local_ctx = [c for c in context_hits if c not in GENERIC_CONTEXT]
+        if local_ctx or clan_ctx:
+            notes.append("اسم المومني بسياق (" + "، ".join(_uniq(local_ctx + clan_ctx)[:4]) + ") — تأكد أنه من العشيرة المقصودة")
             return Match(True, MOMANI_REGION, _uniq([k.word for k in name_hits] + context_hits), "؛ ".join(notes))
         return Match(False, note="؛ ".join(notes), reason=R_NAME_NO_CONTEXT)
     return Match(False, note="؛ ".join(notes), reason=reason)

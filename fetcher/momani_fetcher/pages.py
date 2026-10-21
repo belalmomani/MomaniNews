@@ -175,7 +175,7 @@ def _fetch_entries(sitemap_url: str, fetch, depth: int = 0) -> list[dict]:
 
 
 def collect(store, source_url: str, fetch, now: datetime | None = None, sleep=time.sleep,
-            known_seen=lambda urls: set()) -> tuple[list[FeedItem], str]:
+            known_seen=lambda urls: set(), max_pages: int = MAX_PAGES_PER_SOURCE) -> tuple[list[FeedItem], str]:
     """يجلب عناصر من sitemap أو صفحة قائمة. يتجاوز الروابط المعروفة (في الأخبار أو مرئية سابقاً) ويحدّ عدد الصفحات."""
     if is_sitemap_url(source_url):
         entries = _fetch_entries(source_url, fetch)
@@ -190,7 +190,7 @@ def collect(store, source_url: str, fetch, now: datetime | None = None, sleep=ti
         raise FeedError("لم يُعثر على روابط أخبار في المصدر")
     norm = {u: dedup.normalize_url(u) for u in urls}
     known = store.known_original_urls([n for n in norm.values() if n]) | known_seen([n for n in norm.values() if n])
-    fresh = [u for u in urls if norm[u] and norm[u] not in known][:MAX_PAGES_PER_SOURCE]
+    fresh = [u for u in urls if norm[u] and norm[u] not in known][:max_pages]
     items: list[FeedItem] = []
     for i, u in enumerate(fresh):
         if i:

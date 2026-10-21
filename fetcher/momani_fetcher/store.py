@@ -47,7 +47,7 @@ class SupabaseStore:
 
     # ---- قراءة
     def active_sources(self) -> list[dict]:
-        return self._call("GET", "sources?select=id,name,url,kind,region_id&is_active=eq.true&order=id.asc")
+        return self._call("GET", "sources?select=id,name,url,kind,region_id,last_success_at,origin&is_active=eq.true&order=id.asc")
 
     def active_keywords(self) -> list[dict]:
         return self._call("GET", "keywords?select=word,kind,region_id,needs_context&is_active=eq.true")
@@ -71,6 +71,62 @@ class SupabaseStore:
             for r in self._call("GET", f"news?select=id,fingerprint&fingerprint=in.({q})") or []:
                 out[r["fingerprint"]] = r["id"]
         return out
+
+    # ---- سجل المصادر المكتشفة (يتطلب الترحيل 20261021120000)
+    def upsert_sources(self, rows: list[dict]) -> None:
+        """يضيف المصادر الجديدة فقط (المكرر بالرابط يُتجاهل). قبل الترحيل: بلا عمود origin."""
+        try:
+            self._call("POST", "sources?on_conflict=url", rows, prefer="resolution=ignore-duplicates,return=minimal")
+        except StoreError as e:
+            if e.code != 400:
+                raise
+            plain = [{k: v for k, v in r.items() if k != "origin"} for r in rows]
+            self._call("POST", "sources?on_conflict=url", plain, prefer="resolution=ignore-duplicates,return=minimal")
+
+    def add_source(self, row: dict) -> int | None:
+        try:
+            res = self._call("POST", "sources", row, prefer="return=representation")
+        except StoreError as e:
+            if e.code == 409:
+                return None
+            raise
+        return res[0]["id"] if res else None
+
+    def source_domains(self) -> set[str]:
+        from urllib.parse import urlparse
+        rows = self._call("GET", "sources?select=url&limit=1000") or []
+        return {(urlparse(r["url"]).hostname or "").lower().removeprefix("www.") for r in rows}
+
+    def news_domains(self, limit: int = 300) -> set[str]:
+        from urllib.parse import urlparse
+        rows = self._call("GET", f"news?select=original_url&original_url=not.is.null&order=id.desc&limit={int(limit)}") or []
+        return {(urlparse(r["original_url"]).hostname or "").lower().removeprefix("www.") for r in rows}
+
+    def note_candidate(self, domain: str, via: str = "search", relevant: bool = False) -> None:
+        try:
+            self._call("POST", "source_candidates?on_conflict=domain", {"domain": domain, "via": via, "relevant": relevant},
+                       prefer="resolution=ignore-duplicates,return=minimal")
+            if relevant:  # دليل صلة جديد على نطاق معروف
+                self._call("PATCH", f"source_candidates?domain=eq.{urllib.parse.quote(domain)}&relevant=eq.false", {"relevant": True}, prefer="return=minimal")
+        except StoreError as e:
+            if e.code not in (400, 404):
+                raise
+
+    def candidates_due(self, limit: int = 40) -> list[dict]:
+        from datetime import datetime, timezone
+        now = urllib.parse.quote(datetime.now(timezone.utc).isoformat())
+        return self._call("GET", f"source_candidates?select=domain,via,relevant,status&status=in.(new,rejected,blocked,stale)&next_check_at=lte.{now}&order=relevant.desc,found_at.asc&limit={int(limit)}") or []
+
+    def update_candidate(self, domain: str, fields: dict) -> None:
+        self._call("PATCH", f"source_candidates?domain=eq.{urllib.parse.quote(domain)}", fields, prefer="return=minimal")
+
+    def stale_auto_sources(self, cutoff_iso: str) -> list[dict]:
+        """مصادر آلية/بحث فعّالة لم تنجح منذ [cutoff]: مرشحة للتعطيل (اليدوية لا تُمس أبداً)."""
+        q = urllib.parse.quote(cutoff_iso)
+        return self._call("GET", f"sources?select=id,url,name&is_active=eq.true&origin=eq.auto&last_status=eq.error&or=(last_success_at.is.null,last_success_at.lt.{q})&created_at=lt.{q}") or []
+
+    def set_source_active(self, source_id: int, active: bool) -> None:
+        self._call("PATCH", f"sources?id=eq.{int(source_id)}", {"is_active": active}, prefer="return=minimal")
 
     def known_seen_urls(self, urls: list[str]) -> set[str]:
         """روابط صفحات فُحصت سابقاً (جدول fetch_seen). غيابه (قبل الترحيل) = لا ذاكرة، لا خطأ."""

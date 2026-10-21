@@ -354,6 +354,15 @@ begin
   perform t.chk('fetch_seen: service_role يكتب', t.dml(null, sr, $q$insert into public.fetch_seen (url) values ('https://x.example/a/1')$q$), '1');
   perform t.chk('fetch_seen: رابط http مرفوض', t.dml(null, sr, $q$insert into public.fetch_seen (url) values ('http://x.example/a/2')$q$), 'ERR:23514');
   perform t.chk('fetch_seen: service_role يقرأ', t.sel(null, sr, 'select count(*) from public.fetch_seen'), '1');
+  perform t.chk('candidates: service_role يكتب', t.dml(null, sr, $q$insert into public.source_candidates (domain, via, relevant) values ('site.example', 'search', true)$q$), '1');
+  perform t.chk('candidates: نطاق بحروف كبيرة مرفوض', t.dml(null, sr, $q$insert into public.source_candidates (domain) values ('BAD.example')$q$), 'ERR:23514');
+  perform t.chk('candidates: حالة غير معروفة مرفوضة', t.dml(null, sr, $q$update public.source_candidates set status='x' where domain='site.example'$q$), 'ERR:23514');
+  perform t.chk('candidates: الأدمن يقرأ', t.sel(uc, au, 'select count(*) from public.source_candidates'), '1');
+  perform t.chk('candidates: المستخدم لا يرى', t.sel(ua, au, 'select count(*) from public.source_candidates'), '0');
+  perform t.chk('candidates: الزائر محظور', t.sel(null, anon, 'select count(*) from public.source_candidates'), 'ERR:42501');
+  perform t.chk('candidates: الأدمن لا يكتب (service_role فقط)', t.dml(uc, au, $q$insert into public.source_candidates (domain) values ('x.example')$q$), 'ERR:42501');
+  perform t.chk('sources: origin الافتراضي يدوي', t.sel(null, sr, $q$select count(*) from public.sources where origin='manual'$q$), (select count(*)::text from public.sources));
+  perform t.chk('sources: origin غير صالح مرفوض', t.dml(null, sr, $q$update public.sources set origin='x' where id=(select min(id) from public.sources)$q$), 'ERR:23514');
   perform t.chk('fetch: بصمة تكرار تُقبل', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب1'',''ن'',''abeen'',repeat(''a'',64))'), '1');
   perform t.chk('fetch: نفس البصمة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب2'',''ن'',''abelin'',repeat(''a'',64))'), 'ERR:23505');
   perform t.chk('fetch: بصمة غير صالحة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب3'',''ن'',''abeen'',''xyz'')'), 'ERR:23514');

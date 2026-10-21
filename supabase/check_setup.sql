@@ -33,6 +33,8 @@ from (
   ('20261020120000_sorting_insights_moderation.sql', 'جدول news_flags',         to_regclass('public.news_flags') is not null),
   ('20261021100000_fetch_diagnostics.sql', 'عمود fetch_runs.items_rejected', exists (select 1 from information_schema.columns where table_schema='public' and table_name='fetch_runs' and column_name='items_rejected')),
   ('20261021100000_fetch_diagnostics.sql', 'عمود fetch_runs.details',        exists (select 1 from information_schema.columns where table_schema='public' and table_name='fetch_runs' and column_name='details')),
-  ('20261021110000_fetch_seen.sql', 'جدول fetch_seen',               to_regclass('public.fetch_seen') is not null)
+  ('20261021110000_fetch_seen.sql', 'جدول fetch_seen',               to_regclass('public.fetch_seen') is not null),
+  ('20261021120000_source_discovery.sql', 'جدول source_candidates', to_regclass('public.source_candidates') is not null),
+  ('20261021120000_source_discovery.sql', 'عمود sources.origin',    exists (select 1 from information_schema.columns where table_schema='public' and table_name='sources' and column_name='origin'))
 ) as c(file, check_name, ok)
 order by file, check_name;
