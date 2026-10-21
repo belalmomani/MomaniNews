@@ -348,6 +348,12 @@ begin
   perform t.chk('fetch: المستخدم العادي لا يرى fetch_runs', t.sel(ua, au, 'select count(*) from public.fetch_runs'), '0');
   perform t.chk('fetch: الزائر محظور من fetch_runs', t.sel(null, anon, 'select count(*) from public.fetch_runs'), 'ERR:42501');
   perform t.chk('fetch: المستخدم لا يكتب fetch_runs', t.dml(ua, au, 'insert into public.fetch_runs (sources_total) values (1)'), 'ERR:42501');
+  perform t.chk('fetch_seen: الزائر محظور', t.sel(null, anon, 'select count(*) from public.fetch_seen'), 'ERR:42501');
+  perform t.chk('fetch_seen: المستخدم محظور', t.sel(ua, au, 'select count(*) from public.fetch_seen'), 'ERR:42501');
+  perform t.chk('fetch_seen: الأدمن محظور أيضاً (service_role فقط)', t.sel(uc, au, 'select count(*) from public.fetch_seen'), 'ERR:42501');
+  perform t.chk('fetch_seen: service_role يكتب', t.dml(null, sr, $q$insert into public.fetch_seen (url) values ('https://x.example/a/1')$q$), '1');
+  perform t.chk('fetch_seen: رابط http مرفوض', t.dml(null, sr, $q$insert into public.fetch_seen (url) values ('http://x.example/a/2')$q$), 'ERR:23514');
+  perform t.chk('fetch_seen: service_role يقرأ', t.sel(null, sr, 'select count(*) from public.fetch_seen'), '1');
   perform t.chk('fetch: بصمة تكرار تُقبل', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب1'',''ن'',''abeen'',repeat(''a'',64))'), '1');
   perform t.chk('fetch: نفس البصمة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب2'',''ن'',''abelin'',repeat(''a'',64))'), 'ERR:23505');
   perform t.chk('fetch: بصمة غير صالحة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب3'',''ن'',''abeen'',''xyz'')'), 'ERR:23514');

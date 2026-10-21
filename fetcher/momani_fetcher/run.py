@@ -4,7 +4,7 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 
-from . import dedup, feeds, matcher
+from . import dedup, feeds, matcher, pages as pagemod
 from .store import StoreError, SupabaseStore
 
 MAX_NEW_PER_SOURCE = 50
@@ -36,19 +36,42 @@ class Stats:
         return row
 
 
-def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: Stats, fetch=feeds.http_get, pages: int = 1) -> None:
+def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: Stats, fetch=feeds.http_get, pages: int = 1, sleep=None) -> None:
     sid, name, url = source["id"], source["name"], source["url"]
     rep = {"name": name, "seen": 0, "matched": 0, "inserted": 0, "duplicate": 0, "rejected": 0, "error": None}
     stats.sources.append(rep)
-    if source.get("kind") != "rss":
-        # الصفحات العامة (html) لا تُجلب تلقائياً: يتطلب ذلك مراجعة شروط الموقع لكل مصدر.
-        store.source_result(sid, False, "نوع المصدر غير مدعوم آلياً (RSS فقط)")
+    kind = source.get("kind")
+    if kind not in ("rss", "html"):
+        # النوع manual لا يُجلب آلياً
+        store.source_result(sid, False, "نوع المصدر غير مدعوم آلياً")
         stats.sources_failed += 1
         stats.errors.append(f"{name}: نوع غير مدعوم")
         rep["error"] = "نوع غير مدعوم"
         return
+    via_pages = False
+    kw = {} if sleep is None else {"sleep": sleep}
+    seen_lookup = getattr(store, "known_seen_urls", lambda urls: set())
     try:
-        items, used_url = feeds.load_items(url, fetch)
+        if kind == "html" or (kind == "rss" and "sitemap" in url.lower()):
+            items, _mode = pagemod.collect(store, url, fetch, known_seen=seen_lookup, **kw)
+            used_url, via_pages = url, True
+        else:
+            try:
+                items, used_url = feeds.load_items(url, fetch)
+            except feeds.FeedError as e:
+                if not str(e).startswith("لم يُعثر على خلاصة"):
+                    raise
+                # لا RSS: نجرّب sitemap المعلن في robots.txt أو المسارات الشائعة بدل الإخفاق
+                items = None
+                for sm in pagemod.discover_sitemaps(url, fetch):
+                    try:
+                        items, _mode = pagemod.collect(store, sm, fetch, known_seen=seen_lookup, **kw)
+                        used_url, via_pages = sm, True
+                        break
+                    except feeds.FeedError:
+                        continue
+                if items is None:
+                    raise
         items = items[:MAX_ITEMS_PER_FEED]
     except feeds.FeedError as e:
         store.source_result(sid, False, str(e))
@@ -57,8 +80,10 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
         stats.errors.append(f"{name}: {e}")
         rep["error"] = str(e)[:120]
         return
+    if via_pages:
+        rep["via"] = "sitemap/صفحات"
     # الأخبار الأقدم: صفحات إضافية من الخلاصة نفسها (وضع الاستكمال فقط). فشل صفحة إضافية لا يُفشل المصدر.
-    for page in range(2, max(1, min(pages, MAX_PAGES)) + 1):
+    for page in range(2, max(1, min(pages, MAX_PAGES)) + 1 if not via_pages else 1):
         nxt = feeds.paged_url(used_url, page)
         if not nxt:
             break
@@ -84,6 +109,11 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
             stats.reject_reasons[m.reason or matcher.R_NO_MATCH] += 1
             if m.reason in (matcher.R_AMBIGUOUS, matcher.R_NAME_NO_CONTEXT) and len(stats.reject_samples) < MAX_REJECT_SAMPLES:
                 stats.reject_samples.append(f"[{matcher.REASON_LABELS[m.reason]}] {it.title[:90]} ({name})")
+    if via_pages:
+        # نتذكّر كل صفحة فُحصت (حتى غير المطابقة) كي لا تُجلب من جديد كل دورة
+        mark = getattr(store, "mark_seen", None)
+        if mark:
+            mark([dedup.normalize_url(i.link) for i in items if dedup.normalize_url(i.link)], sid)
     stats.items_matched += len(candidates)
     rep["matched"] = len(candidates)
 
@@ -129,7 +159,7 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
     store.source_result(sid, True, None)
 
 
-def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1) -> Stats:
+def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, sleep=None) -> Stats:
     stats = Stats()
     run_id = store.start_run(trigger)
     try:
@@ -140,7 +170,7 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1) 
             stats.errors.append("لا توجد كلمات مفتاحية مفعّلة")
         for s in sources:
             try:
-                process_source(store, s, keywords, stats, fetch, pages)
+                process_source(store, s, keywords, stats, fetch, pages, sleep)
             except StoreError as e:
                 stats.sources_failed += 1
                 stats.errors.append(f"{s.get('name')}: {e}")
@@ -165,6 +195,9 @@ def report(stats: Stats) -> str:
         lines.append("- ✅ التشغيل نجح تقنياً، لكن ⚠ لم تُكتشف أخبار جديدة ذات صلة في هذه الدورة")
     else:
         lines.append(f"- ✅ نجح التشغيل وأُضيفت {stats.items_inserted} أخبار بانتظار اعتماد المدير")
+    via = [s["name"] for s in stats.sources if s.get("via")]
+    if via:
+        lines.append("- مصادر جُلبت عبر sitemap/صفحات (بلا RSS): " + "، ".join(via))
     productive = [s for s in stats.sources if s["inserted"]]
     if productive:
         lines += ["", "**مصادر أنتجت أخباراً جديدة:**"] + [f"- {s['name']}: {s['inserted']}" for s in productive]

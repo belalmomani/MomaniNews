@@ -223,9 +223,9 @@ class RunTests(unittest.TestCase):
         self.assertEqual(stats.items_inserted, 1)
         self.assertIn("سيئ", store.runs[0]["error_summary"])
 
-    def test_html_sources_skipped_not_scraped(self):
+    def test_manual_sources_skipped_not_scraped(self):
         called = []
-        store = FakeStore([{"id": 1, "name": "ويب", "url": "https://w.example/", "kind": "html"}], KWROWS)
+        store = FakeStore([{"id": 1, "name": "ويب", "url": "https://w.example/", "kind": "manual"}], KWROWS)
         stats = run.run(store, fetch=lambda url: called.append(url) or RSS)
         self.assertEqual(called, [])
         self.assertEqual(stats.sources_failed, 1)

@@ -72,6 +72,30 @@ class SupabaseStore:
                 out[r["fingerprint"]] = r["id"]
         return out
 
+    def known_seen_urls(self, urls: list[str]) -> set[str]:
+        """روابط صفحات فُحصت سابقاً (جدول fetch_seen). غيابه (قبل الترحيل) = لا ذاكرة، لا خطأ."""
+        found: set[str] = set()
+        try:
+            for i in range(0, len(urls), 40):
+                chunk = urls[i:i + 40]
+                inlist = ",".join('"' + u.replace('"', "") + '"' for u in chunk)
+                q = urllib.parse.quote(f"({inlist})", safe="(),\"")
+                for r in self._call("GET", f"fetch_seen?select=url&url=in.{q}") or []:
+                    found.add(r["url"])
+        except StoreError as e:
+            if e.code not in (400, 404):
+                raise
+        return found
+
+    def mark_seen(self, urls: list[str], source_id: int | None = None) -> None:
+        rows = [{"url": u[:1000], "source_id": source_id} for u in dict.fromkeys(urls)]
+        try:
+            for i in range(0, len(rows), 100):
+                self._call("POST", "fetch_seen?on_conflict=url", rows[i:i + 100], prefer="resolution=ignore-duplicates,return=minimal")
+        except StoreError as e:
+            if e.code not in (400, 404):
+                raise
+
     def recent_titles(self, days: int = 7) -> list[tuple[int, str]]:
         from datetime import datetime, timedelta, timezone
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
