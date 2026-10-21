@@ -61,9 +61,16 @@ class MatcherTests(unittest.TestCase):
     def test_exclude_overrides(self):
         self.assertFalse(self.ev("زوار قبة الصخرة المشرفة في القدس", "في بلدية القدس").matched)
 
-    def test_momani_name_without_region(self):
+    def test_momani_name_alone_is_not_enough(self):
+        # وزير/نائب بنفس الاسم: لا صلة بالعشيرة المقصودة بلا سياق
         m = self.ev("تصريح للمومني حول الإعلام")
-        self.assertTrue(m.matched); self.assertEqual(m.region_id, "momani")
+        self.assertFalse(m.matched); self.assertEqual(m.reason, matcher.R_NAME_NO_CONTEXT)
+
+    def test_momani_name_with_clan_or_local_context(self):
+        m = self.ev("ينعى ديوان عشيرة المومني المرحوم الحاج أحمد")
+        self.assertTrue(m.matched); self.assertEqual(m.region_id, "momani"); self.assertIn("تأكد", m.note)
+        m2 = self.ev("المومني يفتتح مشروعاً في محافظة عجلون")
+        self.assertTrue(m2.matched); self.assertEqual(m2.region_id, "momani")
 
     def test_region_wins_over_name(self):
         self.assertEqual(self.ev("المومني يزور عبين").region_id, "abeen")

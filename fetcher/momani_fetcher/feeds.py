@@ -9,6 +9,7 @@ from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree as ET
 
 MAX_BYTES = 6 * 1024 * 1024
+MAX_TEXT = 20_000
 TIMEOUT = 20
 USER_AGENT = "MomaniNewsBot/1.0 (news aggregator; headline+link only)"
 _TAGS = re.compile(r"<[^>]+>")
@@ -21,6 +22,8 @@ class FeedItem:
     link: str
     summary: str
     published: datetime | None
+    text: str = ""       # النص الكامل المتاح في الخلاصة (للمطابقة فقط، لا يُخزَّن كاملاً)
+    publisher: str = ""  # اسم الناشر الأصلي إن وفّرته الخلاصة (مثل عنصر <source> في خلاصات البحث)
 
 
 class FeedError(Exception):
@@ -106,8 +109,14 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
             f = {_local(c.tag): c for c in n}
             link = _text(f.get("link")) or _text(f.get("guid"))
             summary = _text(f.get("description")) or _text(f.get("encoded"))
-            items.append(FeedItem(strip_html(_text(f.get("title"))), link.strip(), strip_html(summary, 600),
-                                  parse_date(_text(f.get("pubDate")) or _text(f.get("date")), now)))
+            full = _text(f.get("description")) + " " + _text(f.get("encoded"))
+            title = strip_html(_text(f.get("title")))
+            publisher = strip_html(_text(f.get("source")), 120)
+            if publisher and title.endswith(" - " + publisher):  # خلاصات البحث تلحق اسم الناشر بالعنوان
+                title = title[: -len(" - " + publisher)].rstrip()
+            items.append(FeedItem(title, link.strip(), strip_html(summary, 600),
+                                  parse_date(_text(f.get("pubDate")) or _text(f.get("date")), now),
+                                  strip_html(full, MAX_TEXT), publisher))
     elif kind == "feed":
         for n in [e for e in root if _local(e.tag) == "entry"]:
             link = ""
@@ -117,8 +126,10 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
                     break
             f = {_local(c.tag): c for c in n}
             summary = _text(f.get("summary")) or _text(f.get("content"))
+            full = _text(f.get("summary")) + " " + _text(f.get("content"))
             items.append(FeedItem(strip_html(_text(f.get("title"))), link.strip(), strip_html(summary, 600),
-                                  parse_date(_text(f.get("published")) or _text(f.get("updated")), now)))
+                                  parse_date(_text(f.get("published")) or _text(f.get("updated")), now),
+                                  strip_html(full, MAX_TEXT)))
     else:
         raise FeedError("not an RSS/Atom feed")
     return [i for i in items if i.title and i.link]
@@ -208,3 +219,15 @@ def load_items(url: str, fetch=None, now: datetime | None = None):
             except FeedError:
                 continue
         raise FeedError("لم يُعثر على خلاصة RSS في هذه الصفحة (أدخل رابط الخلاصة مباشرة)") from None
+
+
+def paged_url(url: str, page: int) -> str | None:
+    """رابط الصفحة n من خلاصة WordPress (?paged=n) للأخبار الأقدم. غير الخلاصات المعروفة بهذا النمط = None."""
+    if page < 2:
+        return url
+    p = _urlparse(url)
+    if "feed" not in p.path.lower():
+        return None
+    from urllib.parse import parse_qsl, urlencode, urlunparse
+    q = [(k, v) for k, v in parse_qsl(p.query) if k != "paged"] + [("paged", str(page))]
+    return urlunparse(p._replace(query=urlencode(q)))

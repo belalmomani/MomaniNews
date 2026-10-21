@@ -30,6 +30,8 @@ from (
   ('20261020120000_sorting_insights_moderation.sql', 'دالة track_news_view',    to_regprocedure('public.track_news_view(bigint)') is not null),
   ('20261020120000_sorting_insights_moderation.sql', 'دالة admin_insights',      to_regprocedure('public.admin_insights()') is not null),
   ('20261020120000_sorting_insights_moderation.sql', 'جدول blocked_words',      to_regclass('public.blocked_words') is not null),
-  ('20261020120000_sorting_insights_moderation.sql', 'جدول news_flags',         to_regclass('public.news_flags') is not null)
+  ('20261020120000_sorting_insights_moderation.sql', 'جدول news_flags',         to_regclass('public.news_flags') is not null),
+  ('20261021100000_fetch_diagnostics.sql', 'عمود fetch_runs.items_rejected', exists (select 1 from information_schema.columns where table_schema='public' and table_name='fetch_runs' and column_name='items_rejected')),
+  ('20261021100000_fetch_diagnostics.sql', 'عمود fetch_runs.details',        exists (select 1 from information_schema.columns where table_schema='public' and table_name='fetch_runs' and column_name='details'))
 ) as c(file, check_name, ok)
 order by file, check_name;

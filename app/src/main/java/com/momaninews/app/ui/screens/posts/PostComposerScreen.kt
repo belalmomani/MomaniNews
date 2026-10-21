@@ -54,6 +54,7 @@ import coil.compose.AsyncImage
 import com.momaninews.app.data.auth.AuthRepositories
 import com.momaninews.app.data.model.Regions
 import com.momaninews.app.data.posts.PostException
+import com.momaninews.app.data.posts.PostMood
 import com.momaninews.app.data.posts.PostRules
 import com.momaninews.app.data.posts.PostsRepositories
 import com.momaninews.app.ui.components.MessageState
@@ -76,11 +77,16 @@ fun PostComposerScreen(onBack: () -> Unit, onSignInClick: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var region by remember { mutableStateOf<String?>(null) }
     var image by remember { mutableStateOf<Uri?>(null) }
+    var moodTag by remember { mutableStateOf<String?>(null) }
+    var moodOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) image = uri }
 
-    val valid = PostRules.cleanText(text) != null && region != null
+    val finalText = PostMood.compose(text, moodTag)
+    if (moodOpen) MoodPicker(onDismiss = { moodOpen = false }, onPick = { moodTag = it; moodOpen = false })
+
+    val valid = PostRules.cleanText(finalText) != null && region != null
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -97,7 +103,7 @@ fun PostComposerScreen(onBack: () -> Unit, onSignInClick: () -> Unit) {
                             busy = true; error = null
                             scope.launch {
                                 try {
-                                    repo!!.submit(ctx, text, region!!, image)
+                                    repo!!.submit(ctx, finalText, region!!, image)
                                     Toast.makeText(ctx, "أُرسل منشورك وسيظهر بعد اعتماد المدير", Toast.LENGTH_LONG).show()
                                     onBack()
                                 } catch (e: CancellationException) {
@@ -139,7 +145,15 @@ fun PostComposerScreen(onBack: () -> Unit, onSignInClick: () -> Unit) {
                         ) {
                             Text(DrawerLogic.initial(user?.displayName ?: ""), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                         }
-                        Text(user?.displayName ?: "", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(user?.displayName ?: "", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            moodTag?.let {
+                                Text("— $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        if (moodTag != null) {
+                            IconButton(onClick = { moodTag = null }) { Icon(Icons.Default.Close, contentDescription = "إزالة") }
+                        }
                     }
                     // شرائح المنطقة (مثل «الموقع/الجمهور» في فيسبوك) — مطلوبة
                     Row(
@@ -196,11 +210,81 @@ fun PostComposerScreen(onBack: () -> Unit, onSignInClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     AddonCard("🖼️", if (image == null) "المعرض" else "تغيير الصورة", Modifier.weight(1f)) { picker.launch("image/*") }
+                    AddonCard("😊", if (moodTag == null) "المشاعر والنشاط" else "تغيير", Modifier.weight(1f)) { moodOpen = true }
                     AddonCard("📍", if (region == null) "المنطقة" else Regions.all.first { it.id == region }.nameAr, Modifier.weight(1f)) {
                         // التبديل بين المناطق بالتدوير (الشرائح أعلاه للاختيار المباشر)
                         val all = Regions.all
                         val next = all.indexOfFirst { it.id == region } + 1
                         region = all[next % all.size].id
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoodPicker(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    var tab by remember { mutableStateOf(0) } // 0 مشاعر، 1 نشاطات
+    var query by remember { mutableStateOf("") }
+    var pendingActivity by remember { mutableStateOf<com.momaninews.app.data.posts.MoodItem?>(null) }
+    var extra by remember { mutableStateOf("") }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        androidx.compose.material3.Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { if (pendingActivity != null) pendingActivity = null else onDismiss() }) {
+                        Icon(androidx.compose.material.icons.automirrored.filled.ArrowBack, contentDescription = "رجوع")
+                    }
+                    Text(
+                        if (tab == 0) "بم تشعر؟" else "ماذا تفعل؟",
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold
+                    )
+                }
+                val act = pendingActivity
+                if (act != null) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("${act.emoji} ${act.label.removeSuffix("…")}", style = MaterialTheme.typography.titleMedium)
+                        androidx.compose.material3.OutlinedTextField(
+                            value = extra, onValueChange = { extra = it.take(PostMood.MAX_EXTRA) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("أكمل… (اختياري)") }
+                        )
+                        Button(onClick = { onPick(PostMood.activityTag(act, extra)) }, modifier = Modifier.fillMaxWidth()) { Text("تم") }
+                    }
+                } else {
+                    Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = tab == 0, onClick = { tab = 0; query = "" }, label = { Text("المشاعر") })
+                        FilterChip(selected = tab == 1, onClick = { tab = 1; query = "" }, label = { Text("النشاطات") })
+                    }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp), placeholder = { Text("بحث") }
+                    )
+                    val shown = PostMood.filter(if (tab == 0) PostMood.feelings else PostMood.activities, query)
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(shown.size) { i ->
+                            val m = shown[i]
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .border(0.5.dp, MaterialTheme.colorScheme.outline)
+                                    .clickable {
+                                        if (tab == 0) onPick(PostMood.feelingTag(m)) else { extra = ""; pendingActivity = m }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(m.emoji, style = MaterialTheme.typography.headlineSmall)
+                                Text(m.label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
                     }
                 }
             }

@@ -372,13 +372,16 @@ class AdminRepository(
         write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", body)
     }
     suspend fun fetchRuns(): List<AdminItem> {
-        val a = JSONArray(get("fetch_runs?select=id,started_at,trigger,sources_total,sources_failed,items_seen,items_matched,items_inserted,items_duplicate,error_summary&order=started_at.desc&limit=30"))
+        val base = "id,started_at,trigger,sources_total,sources_failed,items_seen,items_matched,items_inserted,items_duplicate,error_summary"
+        // items_rejected من الترحيل 20261021100000؛ إن لم يُطبَّق بعد نعرض الأعمدة القديمة بدل أن يفشل التبويب
+        val a = JSONArray(runCatching { get("fetch_runs?select=$base,items_rejected&order=started_at.desc&limit=30") }
+            .getOrElse { get("fetch_runs?select=$base&order=started_at.desc&limit=30") })
         return List(a.length()) { i ->
             val r = a.getJSONObject(i)
             AdminItem(
                 ref = r.get("id").toString(),
                 title = "جلب " + (if (r.optString("trigger") == "manual") "يدوي" else "مجدول") + " — " + SupabaseNewsParser.formatDate(r.optString("started_at")) + " " + r.optString("started_at").drop(11).take(5),
-                meta = "مصادر ${r.optInt("sources_total")} (فشل ${r.optInt("sources_failed")}) • فُحص ${r.optInt("items_seen")} • مطابق ${r.optInt("items_matched")} • جديد ${r.optInt("items_inserted")} • مكرر ${r.optInt("items_duplicate")}",
+                meta = "مصادر ${r.optInt("sources_total")} (فشل ${r.optInt("sources_failed")}) • فُحص ${r.optInt("items_seen")} • مطابق ${r.optInt("items_matched")} • مرفوض ${r.optInt("items_rejected")} • جديد ${r.optInt("items_inserted")} • مكرر ${r.optInt("items_duplicate")}",
                 body = if (r.isNull("error_summary")) "" else r.optString("error_summary"),
                 flag = r.optInt("sources_failed") > 0
             )

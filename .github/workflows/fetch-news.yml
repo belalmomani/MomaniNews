@@ -3,7 +3,12 @@ name: Fetch news (RSS)
 on:
   schedule:
     - cron: "*/30 * * * *"   # كل 30 دقيقة (قد يتأخر GitHub بضع دقائق)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "صفحات الخلاصة الأقدم لكل مصدر (1 = الأحدث فقط، حتى 5 لاستكمال الأخبار الأقدم)"
+        required: false
+        default: "1"
 
 concurrency:
   group: fetch-news
@@ -29,5 +34,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FETCH_PAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.pages || '1' }}
           FETCH_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
         run: python -m momani_fetcher.run

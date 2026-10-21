@@ -33,3 +33,13 @@ insert into public.sources (name, url, kind) values
 on conflict (url) do nothing;
 
 update public.sources set is_active = false where url in ('https://www.assabeel.net/', 'https://watananews.com/');
+
+-- خلاصات بحث بالكلمات (تغطي ناشرين كثيرين دفعة واحدة). غير مُجرَّبة من بيئتي: قد يمنعها robots.txt فيظهر السبب في تقرير الجلب.
+insert into public.sources (name, url, kind) values
+  ('بحث الأخبار: عبين', 'https://news.google.com/rss/search?q=%D8%B9%D8%A8%D9%8A%D9%86&hl=ar&gl=JO&ceid=JO:ar', 'rss'),
+  ('بحث الأخبار: عبلين', 'https://news.google.com/rss/search?q=%D8%B9%D8%A8%D9%84%D9%8A%D9%86&hl=ar&gl=JO&ceid=JO:ar', 'rss'),
+  ('بحث الأخبار: صخرة عجلون', 'https://news.google.com/rss/search?q=%D8%B5%D8%AE%D8%B1%D8%A9%20%D8%B9%D8%AC%D9%84%D9%88%D9%86&hl=ar&gl=JO&ceid=JO:ar', 'rss'),
+  ('بحث الأخبار: عشيرة المومني', 'https://news.google.com/rss/search?q=%D8%B9%D8%B4%D9%8A%D8%B1%D8%A9%20%D8%A7%D9%84%D9%85%D9%88%D9%85%D9%86%D9%8A&hl=ar&gl=JO&ceid=JO:ar', 'rss'),
+  ('بحث الأخبار: آل المومني', 'https://news.google.com/rss/search?q=%D8%A2%D9%84%20%D8%A7%D9%84%D9%85%D9%88%D9%85%D9%86%D9%8A&hl=ar&gl=JO&ceid=JO:ar', 'rss'),
+  ('بحث الأخبار: المومني عجلون', 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D9%85%D9%88%D9%85%D9%86%D9%8A%20%D8%B9%D8%AC%D9%84%D9%88%D9%86&hl=ar&gl=JO&ceid=JO:ar', 'rss')
+on conflict (url) do nothing;

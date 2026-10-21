@@ -110,7 +110,16 @@ class SupabaseStore:
         res = self._call("POST", "fetch_runs", {"trigger": trigger}, prefer="return=representation")
         return res[0]["id"]
 
+    NEW_RUN_COLUMNS = ("items_rejected", "reject_reasons", "details")
+
     def finish_run(self, run_id: int, stats: dict) -> None:
         from datetime import datetime, timezone
         body = dict(stats, finished_at=datetime.now(timezone.utc).isoformat())
-        self._call("PATCH", f"fetch_runs?id=eq.{int(run_id)}", body, prefer="return=minimal")
+        try:
+            self._call("PATCH", f"fetch_runs?id=eq.{int(run_id)}", body, prefer="return=minimal")
+        except StoreError as e:
+            if e.code != 400:
+                raise
+            # الترحيل 20261021100000 لم يُطبَّق بعد: نسجّل الأعمدة القديمة فقط بدل فقدان التشغيل كله
+            legacy = {k: v for k, v in body.items() if k not in self.NEW_RUN_COLUMNS}
+            self._call("PATCH", f"fetch_runs?id=eq.{int(run_id)}", legacy, prefer="return=minimal")
