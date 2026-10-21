@@ -62,7 +62,10 @@ fun NewsDetailScreen(
         state = DetailUiState.Loading
         state = try {
             val news = repository.getNewsById(newsId)
-            if (news != null) DetailUiState.Success(news) else DetailUiState.NotFound
+            if (news != null) {
+                if (reloadKey == 0) repository.trackView(newsId)
+                DetailUiState.Success(news)
+            } else DetailUiState.NotFound
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -193,6 +193,60 @@ object AdminParser {
         return rows + AdminItem(ref = "last_fetch_at", title = "آخر جلب للأخبار", meta = last)
     }
 
+    fun flags(json: String): Map<String, String> {
+        val a = JSONArray(json)
+        return (0 until a.length()).associate { i -> val r = a.getJSONObject(i); r.get("news_id").toString() to str(r, "reason") }
+    }
+
+    /** المعلَّمة تظهر أولاً وعليها ⚠ وسبب التحذير؛ الترتيب النسبي للباقي يبقى كما هو. */
+    fun markFlagged(items: List<AdminItem>, flags: Map<String, String>): List<AdminItem> {
+        if (flags.isEmpty()) return items
+        val marked = items.map { n -> flags[n.ref]?.let { n.copy(title = "⚠ " + n.title, meta = "⚠ $it • " + n.meta) } ?: n }
+        return marked.filter { it.title.startsWith("⚠ ") } + marked.filterNot { it.title.startsWith("⚠ ") }
+    }
+
+    /** نتيجة admin_insights: ثلاث قوائم للعرض + ملخص. */
+    class Insights(val summary: List<AdminItem>, val topNews: List<AdminItem>, val sources: List<AdminItem>)
+
+    fun insights(json: String): Insights {
+        val o = JSONObject(json)
+        val top = o.optJSONArray("top_news") ?: JSONArray()
+        val topNews = List(top.length()) { i ->
+            val r = top.getJSONObject(i)
+            AdminItem(
+                ref = r.get("id").toString(), title = str(r, "title"),
+                meta = "👁 ${r.optLong("views")} • 👍 ${r.optLong("credible")} • 💬 ${r.optLong("comments")}"
+            )
+        }
+        val src = o.optJSONArray("sources") ?: JSONArray()
+        val sources = List(src.length()) { i ->
+            val r = src.getJSONObject(i)
+            val total = r.optLong("total"); val approved = r.optLong("approved")
+            val rate = if (total > 0) " • قبول ${approved * 100 / total}%" else ""
+            AdminItem(
+                ref = "src$i", title = str(r, "name"),
+                meta = "المجموع $total • معتمد $approved • مرفوض ${r.optLong("rejected")} • معلّق ${r.optLong("pending")}$rate",
+                flag = r.optLong("rejected") > approved && total > 0
+            )
+        }
+        val p = o.optJSONObject("posts")
+        val summary = buildList {
+            if (p != null) {
+                add(AdminItem("posts_total", "منشورات المستخدمين", p.optLong("total").toString()))
+                add(AdminItem("posts_approved", "معتمدة", p.optLong("approved").toString()))
+                add(AdminItem("posts_rejected", "مرفوضة", p.optLong("rejected").toString()))
+                add(AdminItem("posts_pending", "بانتظار الاعتماد", p.optLong("pending").toString()))
+                add(AdminItem("posts_7d", "منشورات آخر 7 أيام", p.optLong("last_7d").toString()))
+                val t = p.optLong("total")
+                if (t > 0) add(AdminItem("posts_rate", "نسبة قبول المنشورات", "${p.optLong("approved") * 100 / t}%"))
+            }
+            add(AdminItem("flagged", "أخبار معلّقة فيها كلمة محظورة", o.optLong("flagged_pending").toString(), flag = o.optLong("flagged_pending") > 0))
+            add(AdminItem("blocked", "كلمات محظورة", o.optLong("blocked_words").toString()))
+            add(AdminItem("hidden", "تعليقات مخفية", o.optLong("comments_hidden").toString()))
+        }
+        return Insights(summary, topNews, sources)
+    }
+
     fun comments(json: String): List<AdminItem> {
         val a = JSONArray(json)
         return List(a.length()) { i ->
@@ -291,7 +345,12 @@ class AdminRepository(
     }
 
     // ---- الأخبار
-    suspend fun pendingNews() = AdminParser.news(get("news?select=id,title,excerpt,content,image_url,author_id,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
+    suspend fun pendingNews(): List<AdminItem> {
+        val items = AdminParser.news(get("news?select=id,title,excerpt,content,image_url,author_id,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
+        // التحذيرات (كلمات محظورة) في جدول للأدمن فقط؛ فشل جلبها لا يمنع عرض الأخبار
+        val flags = runCatching { AdminParser.flags(get("news_flags?select=news_id,reason&limit=300")) }.getOrDefault(emptyMap())
+        return AdminParser.markFlagged(items, flags)
+    }
     suspend fun allNews() = AdminParser.news(get("news?select=id,title,excerpt,source_name,author_id,is_featured,created_at,regions(name_ar)&status=neq.pending&order=created_at.desc&limit=50"))
     suspend fun setNewsStatus(ref: String, status: String) {
         require(status in listOf("approved", "rejected", "archived"))
@@ -536,6 +595,27 @@ class AdminRepository(
         if (!r.ok) throw IOException("HTTP ${r.code}")
         AdminParser.stats(r.body)
     }
+
+    suspend fun insights(): AdminParser.Insights = withContext(Dispatchers.IO) {
+        val r = rest.call("POST", "rpc/admin_insights", "{}", bearer = token())
+        if (!r.ok) throw IOException("HTTP ${r.code}")
+        AdminParser.insights(r.body)
+    }
+
+    // ---- كلمات محظورة (للأدمن فقط): خبر معلّق يحويها يُعلَّم بتحذير، وتعليق يحويها يُخفى تلقائياً
+    suspend fun blockedWords(): List<AdminItem> {
+        val a = JSONArray(get("blocked_words?select=id,word&order=word.asc&limit=300"))
+        return List(a.length()) { i ->
+            val r = a.getJSONObject(i)
+            AdminItem(ref = r.get("id").toString(), title = r.optString("word"), meta = "")
+        }
+    }
+    suspend fun addBlockedWord(text: String) {
+        val w = AdminRules.cleanText(text, 80)
+        require(w.length >= 2) { "كلمة قصيرة" }
+        write("POST", "blocked_words", JSONObject().put("word", w))
+    }
+    suspend fun deleteBlockedWord(ref: String) = write("DELETE", "blocked_words?id=eq.${AdminRules.safeId(ref)}", null)
 
     // ---- إشعار عام
     suspend fun broadcast(title: String, body: String, newsId: Int?) {

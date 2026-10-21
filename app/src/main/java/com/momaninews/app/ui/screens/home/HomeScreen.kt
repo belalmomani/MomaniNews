@@ -169,6 +169,19 @@ fun HomeScreen(
                 selectedRegionId = state.selectedRegionId,
                 onRegionSelected = viewModel::onRegionSelected
             )
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(com.momaninews.app.data.repository.NewsSort.entries.toList()) { option ->
+                    FilterChip(
+                        selected = state.sort == option,
+                        onClick = { viewModel.onSortSelected(option) },
+                        label = { Text(option.label) }
+                    )
+                }
+            }
 
             Box(
                 modifier = Modifier

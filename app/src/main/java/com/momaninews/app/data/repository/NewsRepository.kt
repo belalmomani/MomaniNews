@@ -13,6 +13,12 @@ interface NewsRepository {
     /** صفحة تبدأ من [offset]. الافتراضي: الصفحة الأولى فقط. */
     suspend fun getNews(offset: Int): List<NewsItem> = if (offset == 0) getNews() else emptyList()
 
+    /** صفحة مرتبة. الافتراضي (التجريبي المحلي) يتجاهل الترتيب. */
+    suspend fun getNews(offset: Int, sort: NewsSort): List<NewsItem> = getNews(offset)
+
+    /** يسجّل مشاهدة (مؤشر تقريبي). الافتراضي: لا شيء. */
+    suspend fun trackView(newsId: Int) {}
+
     /** «أبرز الأخبار» لشريط الرئيسية. الافتراضي: لا شيء. */
     suspend fun getFeatured(): List<NewsItem> = emptyList()
 

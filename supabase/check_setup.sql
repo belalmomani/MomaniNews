@@ -24,6 +24,12 @@ from (
   ('20261019120000_user_posts.sql', 'عمود news.author_id',           exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='author_id')),
   ('20261019120000_user_posts.sql', 'عمود news.is_featured',         exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='is_featured')),
   ('20261019120000_user_posts.sql', 'دالة my_posts',                 to_regprocedure('public.my_posts()') is not null),
-  ('20261019120000_user_posts.sql', 'حاوية user-posts',              exists (select 1 from storage.buckets where id='user-posts'))
+  ('20261019120000_user_posts.sql', 'حاوية user-posts',              exists (select 1 from storage.buckets where id='user-posts')),
+  ('20261020120000_sorting_insights_moderation.sql', 'عمود news.view_count',    exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='view_count')),
+  ('20261020120000_sorting_insights_moderation.sql', 'عمود news.comment_count', exists (select 1 from information_schema.columns where table_schema='public' and table_name='news' and column_name='comment_count')),
+  ('20261020120000_sorting_insights_moderation.sql', 'دالة track_news_view',    to_regprocedure('public.track_news_view(bigint)') is not null),
+  ('20261020120000_sorting_insights_moderation.sql', 'دالة admin_insights',      to_regprocedure('public.admin_insights()') is not null),
+  ('20261020120000_sorting_insights_moderation.sql', 'جدول blocked_words',      to_regclass('public.blocked_words') is not null),
+  ('20261020120000_sorting_insights_moderation.sql', 'جدول news_flags',         to_regclass('public.news_flags') is not null)
 ) as c(file, check_name, ok)
 order by file, check_name;

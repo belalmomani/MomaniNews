@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.momaninews.app.data.model.NewsItem
 import com.momaninews.app.data.repository.NewsRepositories
 import com.momaninews.app.data.repository.NewsRepository
+import com.momaninews.app.data.repository.NewsSort
 import com.momaninews.app.data.repository.filterNews
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -26,7 +27,8 @@ data class HomeUiState(
     val canLoadMore: Boolean = false,
     val loadMoreFailed: Boolean = false,
     val query: String = "",
-    val selectedRegionId: String? = null
+    val selectedRegionId: String? = null,
+    val sort: NewsSort = NewsSort.NEWEST
 ) {
     val visibleNews: List<NewsItem>
         get() = filterNews(allNews, query, selectedRegionId)
@@ -56,6 +58,12 @@ class HomeViewModel(
         _uiState.update { it.copy(selectedRegionId = regionId) }
     }
 
+    fun onSortSelected(sort: NewsSort) {
+        if (sort == _uiState.value.sort) return
+        _uiState.update { it.copy(sort = sort) }
+        load(isRefresh = false)
+    }
+
     fun clearFilters() {
         _uiState.update { it.copy(query = "", selectedRegionId = null) }
     }
@@ -66,7 +74,7 @@ class HomeViewModel(
         _uiState.update { it.copy(isLoadingMore = true, loadMoreFailed = false) }
         viewModelScope.launch {
             try {
-                val page = repository.getNews(_uiState.value.allNews.size)
+                val page = repository.getNews(_uiState.value.allNews.size, _uiState.value.sort)
                 _uiState.update {
                     val known = it.allNews.map { n -> n.id }.toSet()
                     it.copy(
@@ -98,7 +106,7 @@ class HomeViewModel(
         }
         loadJob = viewModelScope.launch {
             try {
-                val items = repository.getNews()
+                val items = repository.getNews(0, _uiState.value.sort)
                 // الشريط اختياري: فشله لا يمنع عرض الأخبار
                 val featured = try { repository.getFeatured() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
                 _uiState.update {

@@ -459,6 +459,57 @@ begin
   perform t.chk('user-posts: يحذف ملفه', t.dml(ue, au, format('delete from storage.objects where bucket_id=''user-posts'' and name=%L', ue || '/p1.jpg')), '1');
   perform t.chk('user-posts: الأدمن يحذف أي ملف', t.dml(uc, au, format('delete from storage.objects where bucket_id=''user-posts'' and name=%L', ue || '/p2.jpg')), '1');
 
+  -- ---------- عدّادات الترتيب والمشاهدات ----------
+  select id into n_ok from public.news where title = 'خبر معتمد';
+  perform t.chk('counts: المشاهدات تبدأ من صفر', t.sel(null, anon, format('select view_count from public.news where id=%L', n_ok)), '0');
+  perform t.chk('counts: المستخدم لا يدخل عدّادات مزوّرة',
+    t.dml(ue, au, format($q$insert into public.news (title, content, region_id, author_id, source_name, view_count)
+      select 'مزوّر', 'ن', 'abeen', %L, display_name, 999999 from t_names where id = %L$q$, ue, ue)), 'ERR:P0001');
+  perform t.chk('counts: المستخدم لا يعدّل العدّادات', t.dml(ub, au, format('update public.news set view_count=5 where id=%L', n_ok)), '0');
+  perform t.chk('views: الزائر يزيد المشاهدة', t.sel(null, anon, format('select public.track_news_view(%L)::text', n_ok)), '');
+  perform t.chk('views: العدّاد 1', t.sel(null, anon, format('select view_count from public.news where id=%L', n_ok)), '1');
+  perform t.sel(ub, au, format('select public.track_news_view(%L)::text', n_ok));
+  perform t.sel(ub, au, format('select public.track_news_view(%L)::text', n_ok));
+  perform t.chk('views: المسجَّل مرة واحدة فقط', t.sel(null, anon, format('select view_count from public.news where id=%L', n_ok)), '2');
+  perform t.sel(null, anon, format('select public.track_news_view(%L)::text', n_pend));
+  perform t.chk('views: خبر معلّق لا يُحتسب', t.sel(null, su, format('select view_count from public.news where id=%L', n_pend)), '0');
+  perform t.chk('views: news_viewers مغلق على المستخدم', t.sel(ub, au, 'select count(*) from public.news_viewers'), 'ERR:42501');
+  perform t.dml(ub, au, format('insert into public.news_votes (news_id, vote) values (%L, ''credible'')', n_ok));
+  perform t.chk('likes: credible_count = الأصوات الفعلية', t.sel(null, anon, format('select credible_count from public.news where id=%L', n_ok)), (select count(*) from public.news_votes where news_id=n_ok and vote='credible')::text);
+  perform t.dml(ub, au, format('update public.news_votes set vote=''not_credible'' where news_id=%L', n_ok));
+  perform t.chk('likes: تغيير الصوت يحدّث العدّاد', t.sel(null, anon, format('select credible_count from public.news where id=%L', n_ok)), (select count(*) from public.news_votes where news_id=n_ok and vote='credible')::text);
+  update public.comments set created_at = now() - interval '1 hour' where user_id = ub;
+  perform t.chk('comments: إدراج تعليق', t.dml(ub, au, format('insert into public.comments (news_id, body) values (%L, ''تعليق عادي'')', n_ok)), '1');
+  perform t.chk('comments: comment_count = عدد الظاهر فعلاً', t.sel(null, anon, format('select comment_count from public.news where id=%L', n_ok)), (select count(*) from public.comments where news_id=n_ok and status='visible')::text);
+  update public.comments set status = 'hidden' where body = 'تعليق عادي';
+  perform t.chk('comments: الإخفاء ينقص العدّاد', t.sel(null, anon, format('select comment_count from public.news where id=%L', n_ok)), (select count(*) from public.comments where news_id=n_ok and status='visible')::text);
+  -- ---------- كلمات محظورة ----------
+  perform t.chk('blocked: المستخدم لا يقرأ', t.sel(ub, au, 'select count(*) from public.blocked_words'), '0');
+  perform t.chk('blocked: الزائر مرفوض', t.sel(null, anon, 'select count(*) from public.blocked_words'), 'ERR:42501');
+  perform t.chk('blocked: المستخدم لا يضيف', t.dml(ub, au, $q$insert into public.blocked_words (word) values ('سبّة')$q$), 'ERR:42501');
+  perform t.chk('blocked: الأدمن يضيف', t.dml(uc, au, $q$insert into public.blocked_words (word) values ('سبّة')$q$), '1');
+  perform t.chk('blocked: كلمة مكررة (حروف كبيرة/صغيرة) مرفوضة', t.dml(uc, au, $q$insert into public.blocked_words (word) values ('سبّة ')$q$), 'ERR:23505');
+  perform t.chk('blocked: كلمة بحرف واحد مرفوضة', t.dml(uc, au, $q$insert into public.blocked_words (word) values ('س')$q$), 'ERR:23514');
+  perform t.chk('blocked: الأدمن يقرأ', t.sel(uc, au, 'select count(*) from public.blocked_words'), '1');
+  insert into public.news (title, content, region_id) values ('خبر فيه سبّة', 'نص', 'abeen');
+  insert into public.news (title, content, region_id) values ('خبر نظيف', 'نص نظيف', 'abeen');
+  perform t.chk('flags: الخبر المعلّق المخالف يُعلَّم', t.sel(uc, au, $q$select count(*) from public.news_flags f join public.news n on n.id=f.news_id where n.title='خبر فيه سبّة'$q$), '1');
+  perform t.chk('flags: النظيف لا يُعلَّم', t.sel(uc, au, $q$select count(*) from public.news_flags f join public.news n on n.id=f.news_id where n.title='خبر نظيف'$q$), '0');
+  perform t.chk('flags: المستخدم لا يراها', t.sel(ub, au, 'select count(*) from public.news_flags'), '0');
+  perform t.chk('flags: الزائر مرفوض', t.sel(null, anon, 'select count(*) from public.news_flags'), 'ERR:42501');
+  update public.comments set created_at = now() - interval '1 hour' where user_id = ub;
+  perform t.chk('comments: تعليق بكلمة محظورة يُقبل لكن يُخفى', t.dml(ub, au, format('insert into public.comments (news_id, body) values (%L, ''هذه سبّة'')', n_ok)), '1');
+  perform t.chk('comments: المخفي لا يظهر للعامة', t.sel(null, anon, $q$select count(*) from public.comments_public where body='هذه سبّة'$q$), '0');
+  perform t.chk('comments: المخفي لا يُحتسب', t.sel(null, anon, format('select comment_count from public.news where id=%L', n_ok)), (select count(*) from public.comments where news_id=n_ok and status='visible')::text);
+  perform t.chk('comments: الصف المخفي حالته hidden', t.sel(null, su, $q$select status::text from public.comments where body='هذه سبّة'$q$), 'hidden');
+  -- ---------- إحصاءات الأدمن ----------
+  perform t.chk('insights: المستخدم مرفوض', t.sel(ub, au, 'select public.admin_insights()::text'), 'ERR:42501');
+  perform t.chk('insights: الزائر مرفوض', t.sel(null, anon, 'select public.admin_insights()::text'), 'ERR:42501');
+  perform t.chk('insights: الأدمن: أعلى الأخبار مشاهدةً', t.sel(uc, au, $q$select (public.admin_insights()->'top_news'->0->>'title')$q$), 'خبر معتمد');
+  perform t.chk('insights: عدّاد المعلّق المُعلَّم', t.sel(uc, au, $q$select (public.admin_insights()->>'flagged_pending')$q$), '1');
+  perform t.chk('insights: كلمات محظورة', t.sel(uc, au, $q$select (public.admin_insights()->>'blocked_words')$q$), '1');
+  perform t.chk('insights: منشورات المستخدمين مجموعة', t.sel(uc, au, $q$select (public.admin_insights()->'posts'->>'total')::int > 0$q$), 'true');
+
   delete from auth.users where id = ue;
   perform t.chk('post: حذف الحساب يحذف منشورات الكاتب (cascade)', t.sel(null, su, format('select count(*) from public.news where author_id=%L', ue)), '0');
 

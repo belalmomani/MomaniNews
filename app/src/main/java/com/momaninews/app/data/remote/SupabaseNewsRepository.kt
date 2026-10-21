@@ -2,6 +2,7 @@ package com.momaninews.app.data.remote
 
 import com.momaninews.app.data.model.NewsItem
 import com.momaninews.app.data.repository.NewsRepository
+import com.momaninews.app.data.repository.NewsSort
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -36,10 +37,24 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
 
     override val pageSize: Int get() = PAGE_SIZE
 
-    override suspend fun getNews(offset: Int): List<NewsItem> = withContext(Dispatchers.IO) {
+    override suspend fun getNews(offset: Int): List<NewsItem> = getNews(offset, NewsSort.NEWEST)
+
+    override suspend fun getNews(offset: Int, sort: NewsSort): List<NewsItem> = withContext(Dispatchers.IO) {
         val off = offset.coerceAtLeast(0)
-        val body = get("news?select=${SupabaseNewsParser.SELECT}&order=published_at.desc&limit=$PAGE_SIZE&offset=$off")
+        val filter = sort.filter?.let { "&$it" } ?: ""
+        val body = get("news?select=${SupabaseNewsParser.SELECT}$filter&order=${sort.order}&limit=$PAGE_SIZE&offset=$off")
         SupabaseNewsParser.parseList(body)
+    }
+
+    /** مشاهدة واحدة؛ المسجَّل يُحتسب مرة لكل خبر (الرمز يُرسل إن وُجد). الفشل صامت: لا يؤثر على القراءة. */
+    override suspend fun trackView(newsId: Int): Unit = withContext(Dispatchers.IO) {
+        runCatching {
+            val auth = com.momaninews.app.data.auth.AuthRepositories.default
+            val token = (auth as? com.momaninews.app.data.auth.SupabaseAuthRepository)?.tokenAndUserId()?.first
+            SupabaseRest(base.removeSuffix("/rest/v1/"), publicKey)
+                .call("POST", "rpc/track_news_view", org.json.JSONObject().put("p_news_id", newsId).toString(), bearer = token)
+        }
+        Unit
     }
 
     /**

@@ -103,6 +103,10 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                     AdminAction("حذف", danger = true, confirm = "حذف المصدر؟ (الأخبار المرتبطة به تبقى)") { i, _ -> r.deleteSource(i.ref) }
                 )
             },
+            AdminTab("كلمات محظورة", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة محظورة", meta = "الخبر المعلّق الذي يحويها يظهر أولاً مع ⚠، والتعليق الذي يحويها يُخفى تلقائياً")) + r.blockedWords() }) { w ->
+                if (w.ref == "add") listOf(AdminAction("إضافة", prompt = "الكلمة (حرفان فأكثر)") { _, text -> r.addBlockedWord(text ?: "") })
+                else listOf(AdminAction("حذف", danger = true, confirm = "حذف الكلمة من القائمة؟") { i, _ -> r.deleteBlockedWord(i.ref) })
+            },
             AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { n -> listOf(
                 AdminAction(if (n.flag) "إلغاء التمييز" else "تمييز في أبرز الأخبار") { i, _ -> r.setNewsFeatured(i.ref, !i.flag) },
                 AdminAction("أرشفة", confirm = "أرشفة الخبر (يختفي من التطبيق)؟") { i, _ -> r.setNewsStatus(i.ref, "archived") },
@@ -264,7 +268,10 @@ fun AdminAddNewsScreen(onBack: () -> Unit) = AdminGate("إضافة خبر", onBa
 fun AdminStatsScreen(onBack: () -> Unit) = AdminGate("المؤشرات", onBack) { r ->
     AdminListScreen(
         "المؤشرات", onBack, listOf(
-            AdminTab("الأرقام", "لا بيانات", { r.stats() }) { emptyList() }
+            AdminTab("الأرقام", "لا بيانات", { r.stats() }) { emptyList() },
+            AdminTab("الأكثر قراءة", "لا بيانات بعد", { r.insights().topNews }) { emptyList() },
+            AdminTab("المصادر", "لا بيانات", { r.insights().sources }) { emptyList() },
+            AdminTab("منشورات المستخدمين", "لا بيانات", { r.insights().summary }) { emptyList() }
         )
     )
 }

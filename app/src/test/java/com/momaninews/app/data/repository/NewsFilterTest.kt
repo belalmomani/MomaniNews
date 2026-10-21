@@ -40,4 +40,15 @@ class NewsFilterTest {
     fun query_withNoMatch_returnsEmpty() {
         assertTrue(filterNews(items, query = "zzzz-لا-يوجد", regionId = null).isEmpty())
     }
+
+    @Test
+    fun sort_serverOrders() {
+        assertEquals("published_at.desc", NewsSort.NEWEST.order)
+        assertEquals("view_count.desc,published_at.desc", NewsSort.MOST_VIEWED.order)
+        assertEquals("credible_count.desc,published_at.desc", NewsSort.MOST_LIKED.order)
+        assertEquals("comment_count.desc,published_at.desc", NewsSort.MOST_COMMENTED.order)
+        assertEquals("author_id=not.is.null", NewsSort.USER_POSTS.filter)
+        assertEquals(null, NewsSort.NEWEST.filter)
+        assertEquals(5, NewsSort.entries.size)
+    }
 }
