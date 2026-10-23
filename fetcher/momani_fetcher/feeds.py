@@ -63,6 +63,20 @@ class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def resolve_link(link: str) -> str:
+    """روابط تحويل Bing (apiclick.aspx?...&url=https%3a...) تحمل رابط الناشر الحقيقي في المعلمة url؛ نستخرجه. غيرها يُترك كما هو."""
+    from urllib.parse import parse_qs, urlsplit
+    try:
+        p = urlsplit(link.strip())
+        if (p.hostname or "").lower().endswith("bing.com") and "apiclick" in p.path.lower():
+            real = (parse_qs(p.query).get("url") or [""])[0].strip()
+            if real.lower().startswith(("https://", "http://")):
+                return real
+    except ValueError:
+        pass
+    return link.strip()
+
+
 def safe_url(url: str) -> str:
     """يرمّز الحروف غير اللاتينية في الرابط (روابط عربية في sitemap): http.client يرفض غير ASCII. ما رُمِّز سابقاً (%XX) لا يُرمَّز مرتين."""
     from urllib.parse import quote, urlsplit, urlunsplit
@@ -138,7 +152,9 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
         nodes = [e for e in root.iter() if _local(e.tag) == "item"]
         for n in nodes:
             f = {_local(c.tag): c for c in n}
-            link = _text(f.get("link")) or _text(f.get("guid"))
+            if "Source" in f and "source" not in f:   # Bing: <News:Source>اسم الناشر</News:Source>
+                f["source"] = f["Source"]
+            link = resolve_link(_text(f.get("link")) or _text(f.get("guid")))
             summary = _text(f.get("description")) or _text(f.get("encoded"))
             full = _text(f.get("description")) + " " + _text(f.get("encoded"))
             title = strip_html(_text(f.get("title")))

@@ -32,10 +32,13 @@ QUERIES += [q for q in variants.extra_queries() if q not in QUERIES]
 ENGINE_GOOGLE, ENGINE_BING, ENGINE_DIRECT = "Google News", "Bing News", "مصادر مباشرة"
 # محركات أخرى متاحة بصيغة RSS رسمية. الفحص يحترم robots.txt؛ إن حجبها محرك سقط بصمت في التقرير (يُسجَّل «محجوب») ولا نتحايل.
 ENGINES = (ENGINE_GOOGLE, ENGINE_BING)
-BING_QUERIES = QUERIES[:12]   # عدد أقل: لا نُغرق محركاً ثانوياً؛ القياس يقرّر التوسع
+# Google News يحجب نتائج البحث الآلي بـ robots.txt (ثبت من تقرير تشغيل حقيقي) فلا نسجّل استعلاماته ولا نتحايل. Bing ردّ فعلاً.
+# نُبقي الدالة google_news_url لو تغيّر robots يوماً (GOOGLE_ENABLED=True يعيد تسجيلها).
+GOOGLE_ENABLED = False
+BING_QUERIES = QUERIES   # كل الاستعلامات الأساسية على Bing
 
 
-EXT_PREFIX = "بحث موسّع Google News: "
+EXT_PREFIX = "بحث موسّع Bing: "
 EXTENDED: list[str] = search_terms.extended(QUERIES)   # عبارات المالك الموسّعة (تدور على دفعات)
 
 
@@ -60,14 +63,15 @@ def search_source_rows() -> list[dict]:
     rows = []
     for q in QUERIES:
         label = q if len(q) <= 60 else q[:57] + "…"
-        rows.append({"name": f"بحث Google News: {label}"[:120], "url": google_news_url(q), "kind": "rss", "origin": "search"})
+        if GOOGLE_ENABLED:
+            rows.append({"name": f"بحث Google News: {label}"[:120], "url": google_news_url(q), "kind": "rss", "origin": "search"})
         if q in BING_QUERIES:
             rows.append({"name": f"بحث Bing News: {label}"[:120], "url": bing_news_url(q), "kind": "rss", "origin": "search"})
     return rows
 
 
 def extended_source_rows() -> list[dict]:
-    return [{"name": (EXT_PREFIX + (q if len(q) <= 80 else q[:77] + "…"))[:120], "url": google_news_url(q), "kind": "rss", "origin": "search"} for q in EXTENDED]
+    return [{"name": (EXT_PREFIX + (q if len(q) <= 80 else q[:77] + "…"))[:120], "url": bing_news_url(q), "kind": "rss", "origin": "search"} for q in EXTENDED]
 
 
 def is_extended(name: str) -> bool:

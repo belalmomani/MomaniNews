@@ -633,3 +633,57 @@ class ArabicUrlTests(unittest.TestCase):
         with mock.patch("urllib.request.OpenerDirector.open", boom):
             with self.assertRaises(feeds.FeedError):
                 feeds.http_get("https://s.example/x")
+
+
+BING_RSS = ('<?xml version="1.0" encoding="utf-8" ?><rss version="2.0" xmlns:News="https://www.bing.com/news/search?q=x&amp;format=rss"><channel>'
+            '<item><title>افتتاح مدرسة في عبين</title>'
+            '<link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=ABC123&amp;url=https%3a%2f%2flocal-news.example%2fa%2f1&amp;c=555&amp;mkt=ar-jo</link>'
+            '<description>تفاصيل</description><pubDate>Thu, 22 Oct 2026 08:00:00 GMT</pubDate><News:Source>صحيفة محلية</News:Source></item>'
+            '<item><title>وفاة الحاج في عبلين</title>'
+            '<link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;tid=DEF&amp;url=http%3a%2f%2fold-site.example%2fx%2f2</link>'
+            '<description>d</description><News:Source>موقع قديم</News:Source></item></channel></rss>').encode("utf-8")
+
+
+class BingLinkTests(unittest.TestCase):
+    """أصل فقدان أخبار Bing: روابطه http تحويلية فكانت تُحذف بصمت بعد المطابقة (لا مقبولة ولا مرفوضة)."""
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_resolve_link_extracts_publisher_url(self):
+        self.assertEqual(feeds.resolve_link("http://www.bing.com/news/apiclick.aspx?ref=FexRss&tid=A&url=https%3a%2f%2fsite.example%2fa%2f1&c=1"), "https://site.example/a/1")
+        self.assertEqual(feeds.resolve_link("https://site.example/a/1"), "https://site.example/a/1")
+        self.assertEqual(feeds.resolve_link("https://news.google.com/rss/articles/x?url=https%3a%2f%2fe.example"), "https://news.google.com/rss/articles/x?url=https%3a%2f%2fe.example")
+
+    def test_bing_item_parsed_with_real_link_and_publisher(self):
+        items = feeds.parse_feed(BING_RSS, NOW)
+        self.assertEqual(items[0].link, "https://local-news.example/a/1")
+        self.assertEqual(items[0].publisher, "صحيفة محلية")
+
+    def test_bing_news_inserted_and_http_publisher_counted_not_silently_lost(self):
+        st = Rec([src(1, B1)], KWROWS)
+        stats = run.run(st, fetch=lambda u: BING_RSS, now=NOW)
+        self.assertEqual(stats.items_inserted, 1)
+        self.assertEqual(st.news[0]["original_url"], "https://local-news.example/a/1")
+        self.assertEqual(st.news[0]["source_name"], "صحيفة محلية")
+        self.assertEqual(stats.items_dropped_link, 1)                   # الناشر http: يُحصى ويظهر في التقرير
+        rep = run.report(stats)
+        self.assertIn("بلا رابط https صالح", rep)
+        self.assertIn("old-site.example", rep)
+
+
+class RobotsBlockedEngineTests(unittest.TestCase):
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_engine_blocked_by_robots_is_stopped_not_counted_as_failures(self):
+        calls = []
+        def f(u):
+            if u.endswith("/robots.txt"):
+                return b"User-agent: *\nDisallow: /rss/search\n" if "google" in u else b""
+            calls.append(u)
+            return rssd([])
+        st = Rec([src(i, f"https://news.google.com/rss/search?q=x{i}") for i in range(1, 6)] + [src(9, B1)], KWROWS)
+        stats = run.run(st, fetch=f, now=NOW)
+        self.assertFalse(any("news.google" in c for c in calls))        # لم يُطرق Google إطلاقاً
+        self.assertEqual(stats.sources_failed, 0)
+        self.assertEqual(stats.engines_blocked, [queries.ENGINE_GOOGLE])
+        self.assertTrue(any("robots.txt لا يسمح" in h for h in stats.health))
+        self.assertEqual(st.results[9], (True, None))                   # Bing عولج
