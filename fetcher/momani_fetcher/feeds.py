@@ -25,10 +25,26 @@ class FeedItem:
     text: str = ""       # النص الكامل المتاح في الخلاصة (للمطابقة فقط، لا يُخزَّن كاملاً)
     publisher_url: str = ""  # موقع الناشر الأصلي (سمة url في <source>) لاكتشاف مصادر جديدة
     publisher: str = ""  # اسم الناشر الأصلي إن وفّرته الخلاصة (مثل عنصر <source> في خلاصات البحث)
+    links: tuple = ()    # روابط https داخل نص الخبر (لاكتشاف مواقع إخبارية مذكورة فيه)
 
 
 class FeedError(Exception):
     pass
+
+
+_HREF_RAW = re.compile(r"""<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
+
+
+def html_links(raw: str, limit: int = 30) -> tuple:
+    """روابط https في HTML خام (قبل التجريد). تُستخدم فقط كمرشحات تُفحص لاحقاً، لا تُجلب مباشرة."""
+    out: list[str] = []
+    for m in _HREF_RAW.finditer(html.unescape(raw or "")):
+        u = (m.group(1) or m.group(2) or "").strip()
+        if u.lower().startswith("https://") and u not in out:
+            out.append(u)
+            if len(out) >= limit:
+                break
+    return tuple(out)
 
 
 def strip_html(text: str, limit: int | None = None) -> str:
@@ -117,7 +133,8 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
                 title = title[: -len(" - " + publisher)].rstrip()
             items.append(FeedItem(title, link.strip(), strip_html(summary, 600),
                                   parse_date(_text(f.get("pubDate")) or _text(f.get("date")), now),
-                                  strip_html(full, MAX_TEXT), publisher_url=(f["source"].get("url", "") if "source" in f else ""), publisher=publisher))
+                                  strip_html(full, MAX_TEXT), publisher_url=(f["source"].get("url", "") if "source" in f else ""), publisher=publisher,
+                                  links=html_links(full)))
     elif kind == "feed":
         for n in [e for e in root if _local(e.tag) == "entry"]:
             link = ""
@@ -130,7 +147,7 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
             full = _text(f.get("summary")) + " " + _text(f.get("content"))
             items.append(FeedItem(strip_html(_text(f.get("title"))), link.strip(), strip_html(summary, 600),
                                   parse_date(_text(f.get("published")) or _text(f.get("updated")), now),
-                                  strip_html(full, MAX_TEXT)))
+                                  strip_html(full, MAX_TEXT), links=html_links(full)))
     else:
         raise FeedError("not an RSS/Atom feed")
     return [i for i in items if i.title and i.link]

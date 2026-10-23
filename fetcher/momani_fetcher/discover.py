@@ -90,9 +90,9 @@ def probe_domain(domain: str, fetch, keywords: list[matcher.Keyword], via_search
             "kind": kind, "url": url, "hits": hits}
 
 
-def run_discovery(store, fetch=feeds.http_get, now: datetime | None = None) -> dict:
+def run_discovery(store, fetch=feeds.http_get, now: datetime | None = None, backfill=None) -> dict:
     now = now or datetime.now(timezone.utc)
-    rep = {"probed": 0, "registered": [], "rejected": [], "blocked": [], "disabled": [], "search_sources": 0}
+    rep = {"probed": 0, "registered": [], "rejected": [], "blocked": [], "disabled": [], "search_sources": 0, "backfilled": []}
     keywords = [matcher.Keyword(k["word"], k["kind"], k.get("region_id"), bool(k.get("needs_context"))) for k in store.active_keywords()]
     # 1) استعلامات البحث (تُسجَّل مرة؛ المكرر يُتجاهل)
     store.upsert_sources(queries.search_source_rows())
@@ -120,6 +120,10 @@ def run_discovery(store, fetch=feeds.http_get, now: datetime | None = None) -> d
             new_sources += 1
             have.add(d)
             rep["registered"].append(f"{d} ({res['kind']})")
+            if backfill and sid:
+                # أثر رجعي: لا نبدأ من اللحظة فقط؛ نسجّل أخبار آخر 30 يوماً مما يعرضه المصدر (المكرر يُتجاهل)
+                bf = backfill(store, {"id": sid, "name": d[:120], "url": res["url"], "kind": res["kind"], "origin": "auto"}, keywords, fetch, now)
+                rep["backfilled"].append(f"{d}: فُحص {bf['seen']}، ذو صلة {bf['matched']}، جديد {bf['inserted']}، مكرر {bf['duplicate']}" + (f" ⚠ {bf['error']}" if bf.get("error") else ""))
             fields.update(status="registered", source_id=sid, next_check_at=(now + timedelta(days=3650)).isoformat())
         else:
             rep[status].append(f"{d}: {res['reason']}")
@@ -142,7 +146,7 @@ def report(rep: dict) -> str:
     L = ["## تقرير اكتشاف المصادر", ""]
     L.append(f"- استعلامات بحث مسجّلة (Google News): {rep['search_sources']}")
     L.append(f"- نطاقات فُحصت: {rep['probed']} | سُجّل: {len(rep['registered'])} | رُفض: {len(rep['rejected'])} | محجوب: {len(rep['blocked'])} | عُطّل لموته: {len(rep['disabled'])}")
-    for title, key in (("مصادر جديدة مسجَّلة", "registered"), ("مرفوضة (تُعاد بعد 30 يوماً)", "rejected"), ("محجوبة (robots)", "blocked"), ("عُطّلت", "disabled")):
+    for title, key in (("مصادر جديدة مسجَّلة", "registered"), ("أثر رجعي للمصادر الجديدة", "backfilled"), ("مرفوضة (تُعاد بعد 30 يوماً)", "rejected"), ("محجوبة (robots)", "blocked"), ("عُطّلت", "disabled")):
         if rep[key]:
             L += ["", f"**{title}:**"] + [f"- {x}" for x in rep[key]]
     if not rep["registered"]:
@@ -156,7 +160,8 @@ def main() -> int:
         print("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY غير مضبوطين.", file=sys.stderr)
         return 2
     try:
-        rep = run_discovery(SupabaseStore(url, key))
+        from . import run as runmod
+        rep = run_discovery(SupabaseStore(url, key), backfill=runmod.backfill_source)
     except StoreError as e:
         print(f"فشل: {e}. هل طُبّق الترحيل 20261021120000_source_discovery.sql؟", file=sys.stderr)
         return 1

@@ -367,6 +367,12 @@ begin
   perform t.chk('fetch: نفس البصمة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب2'',''ن'',''abelin'',repeat(''a'',64))'), 'ERR:23505');
   perform t.chk('fetch: بصمة غير صالحة مرفوضة', t.dml(null, sr, 'insert into public.news (title,content,region_id,fingerprint) values (''ب3'',''ن'',''abeen'',''xyz'')'), 'ERR:23514');
   perform t.chk('fetch: المجلوب pending لا يظهر للعامة', t.sel(null, anon, 'select count(*) from public.news where fingerprint is not null'), '0');
+  perform t.chk('link_checks: service_role يكتب', t.dml(null, sr, format($q$insert into public.link_checks (news_id, url, status, reason) values (%s, 'https://x.example/a', 'broken', 'HTTP 404')$q$, n_pend)), '1');
+  perform t.chk('link_checks: حالة غير معروفة مرفوضة', t.dml(null, sr, format($q$update public.link_checks set status='fine' where news_id=%s$q$, n_pend)), 'ERR:23514');
+  perform t.chk('link_checks: الأدمن يقرأ', t.sel(uc, au, 'select count(*) from public.link_checks'), '1');
+  perform t.chk('link_checks: المستخدم لا يرى', t.sel(ua, au, 'select count(*) from public.link_checks'), '0');
+  perform t.chk('link_checks: الزائر محظور', t.sel(null, anon, 'select count(*) from public.link_checks'), 'ERR:42501');
+  perform t.chk('link_checks: الأدمن لا يكتب', t.dml(uc, au, format($q$update public.link_checks set status='ok' where news_id=%s$q$, n_pend)), 'ERR:42501');
   perform t.chk('fetch: news_refs للأدمن فقط', t.sel(ua, au, 'select count(*) from public.news_refs'), '0');
   perform t.chk('fetch: الزائر لا يقرأ news_refs', t.sel(null, anon, 'select count(*) from public.news_refs'), 'ERR:42501');
 

@@ -59,7 +59,7 @@ class RunReportTests(unittest.TestCase):
         self.assertEqual(len(st.reject_samples), 2)
         row = store.runs[0]
         self.assertEqual(row["items_rejected"], 3)
-        self.assertEqual(row["details"][0]["inserted"], 1)
+        self.assertEqual(row["details"]["sources"][0]["inserted"], 1)
 
     def test_report_distinguishes_success_from_no_news(self):
         data = rss([("أسعار النفط", "https://s.example/2", "d", "", "")])

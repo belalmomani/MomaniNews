@@ -175,13 +175,33 @@ class SupabaseStore:
             if e.code != 409:
                 raise
 
-    def source_result(self, source_id: int, ok: bool, error: str | None) -> None:
+    def source_result(self, source_id: int, ok: bool, error: str | None, advance: bool = True) -> None:
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
         body = {"last_fetched_at": now, "last_status": "ok" if ok else "error", "last_error": None if ok else (error or "")[:300]}
-        if ok:
+        if ok and advance:   # advance=False: الاستدراك لم يكتمل فنُبقي نقطة آخر نجاح لتُستكمل الفجوة في الدورة التالية
             body["last_success_at"] = now
         self._call("PATCH", f"sources?id=eq.{int(source_id)}", body, prefer="return=minimal")
+
+    def update_source_url(self, source_id: int, url: str) -> None:
+        self._call("PATCH", f"sources?id=eq.{int(source_id)}", {"url": url}, prefer="return=minimal")
+
+    # ---- فحص روابط الأخبار (يتطلب الترحيل 20261022100000)
+    def recent_news_links(self, days: int = 21, limit: int = 300) -> list[dict]:
+        from datetime import datetime, timedelta, timezone
+        since = urllib.parse.quote((datetime.now(timezone.utc) - timedelta(days=days)).isoformat())
+        return self._call("GET", f"news?select=id,title,original_url&original_url=not.is.null&created_at=gte.{since}&order=id.desc&limit={int(limit)}") or []
+
+    def link_checks_for(self, ids: list[int]) -> dict[int, dict]:
+        out: dict[int, dict] = {}
+        for i in range(0, len(ids), 80):
+            q = ",".join(str(int(x)) for x in ids[i:i + 80])
+            for r in self._call("GET", f"link_checks?select=news_id,status,attempts,next_check_at&news_id=in.({q})") or []:
+                out[r["news_id"]] = r
+        return out
+
+    def save_link_check(self, row: dict) -> None:
+        self._call("POST", "link_checks?on_conflict=news_id", row, prefer="resolution=merge-duplicates,return=minimal")
 
     def log_failure(self, source_id: int | None, url: str | None, error: str) -> None:
         self._call("POST", "failed_fetch_logs", {"source_id": source_id, "url": (url or "")[:500], "error": error[:500]}, prefer="return=minimal")

@@ -22,10 +22,10 @@ class QueryTests(unittest.TestCase):
 
     def test_rows_valid(self):
         rows = queries.search_source_rows()
-        self.assertEqual(len(rows), len(queries.QUERIES))
+        self.assertEqual(len(rows), len(queries.QUERIES) + len(queries.BING_QUERIES))
         self.assertEqual(len({r["url"] for r in rows}), len(rows))
         for r in rows:
-            self.assertTrue(r["url"].startswith("https://news.google.com/rss/search?q="))
+            self.assertTrue(r["url"].startswith(("https://news.google.com/rss/search?q=", "https://www.bing.com/news/search?q=")))
             self.assertLessEqual(len(r["name"]), 120)
             self.assertEqual((r["kind"], r["origin"]), ("rss", "search"))
         first = rows[0]["url"]
@@ -166,7 +166,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual((row["kind"], row["origin"], row["relevance_hits"]), ("rss", "auto", 1))
         self.assertEqual(st.cands["good.example"]["status"], "registered")
         self.assertEqual(st.cands["good.example"]["source_id"], 501)
-        self.assertEqual(len(st.upserts[0]), len(queries.QUERIES))
+        self.assertEqual(len(st.upserts[0]), len(queries.QUERIES) + len(queries.BING_QUERIES))
         self.assertIn("good.example", discover.report(rep))
 
     def test_offtopic_rejected_with_recheck_date(self):

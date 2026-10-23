@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlparse
 
-from .feeds import FeedError, FeedItem, MAX_TEXT, parse_date, robots_allows, strip_html
+from .feeds import FeedError, FeedItem, MAX_TEXT, html_links, parse_date, robots_allows, strip_html
 
 PER_PAGE = 50
 FIELDS = "link,date_gmt,title,excerpt,content"
@@ -37,9 +37,10 @@ def parse_posts(data: bytes, now: datetime | None = None) -> list[FeedItem]:
         if not link or not title:
             continue
         excerpt = strip_html(str((p.get("excerpt") or {}).get("rendered", "")), 600)
-        content = strip_html(str((p.get("content") or {}).get("rendered", "")), MAX_TEXT)
+        raw_content = str((p.get("content") or {}).get("rendered", ""))
+        content = strip_html(raw_content, MAX_TEXT)
         when = p.get("date_gmt")
-        out.append(FeedItem(title[:300], link, excerpt or content[:600], parse_date(f"{when}+00:00" if when else None, now), content))
+        out.append(FeedItem(title[:300], link, excerpt or content[:600], parse_date(f"{when}+00:00" if when else None, now), content, links=html_links(raw_content)))
     return out
 
 

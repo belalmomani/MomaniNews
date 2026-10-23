@@ -167,7 +167,7 @@ class FakeStore:
         self.news.append(dict(row, id=self._next))
         return self._next
     def add_ref(self, news_id, source_name, url): self.refs.append((news_id, source_name, url))
-    def source_result(self, sid, ok, error): self.results[sid] = (ok, error)
+    def source_result(self, sid, ok, error, advance=True): self.results[sid] = (ok, error); self.advance = getattr(self, 'advance', {}); self.advance[sid] = advance
     def log_failure(self, sid, url, error): self.failures.append((sid, url, error))
     def start_run(self, trigger): self.runs.append({"trigger": trigger}); return len(self.runs)
     def finish_run(self, run_id, stats): self.runs[run_id - 1].update(stats)
