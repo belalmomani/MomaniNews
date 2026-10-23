@@ -533,3 +533,29 @@ class ExtendedSearchTests(unittest.TestCase):
         self.assertTrue(matcher.evaluate("تعزية المومنيين في الجنيد", "", KWS).matched)
         self.assertFalse(matcher.evaluate("بلدية الجنيد تعلن مناقصة", "", KWS).matched)   # سياق وحده لا يكفي
         self.assertFalse(matcher.evaluate("الوزير المومنيين يصرح", "", KWS).matched)   # الاسم وحده بلا سياق
+
+
+class ProbeTests(unittest.TestCase):
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_probe_reports_empty_feed_and_html_response(self):
+        from momani_fetcher import probe
+        empty = validate.Probe(200, "https://news.google.com/rss/search?q=x", "application/xml", rssd([]))
+        r = probe.probe_url("https://news.google.com/rss/search?q=x", KWS, lambda u: empty, lambda u: b"")
+        self.assertEqual((r["status"], r["items"], r["engine"]), (200, 0, queries.ENGINE_GOOGLE))
+        self.assertIn("بداية الاستجابة", probe.report([r]))
+        html = validate.Probe(200, "https://consent.google.com/x", "text/html", b"<html>consent</html>")
+        r2 = probe.probe_url("https://news.google.com/rss/search?q=x", KWS, lambda u: html, lambda u: b"")
+        self.assertIn("parse_error", r2)
+        self.assertEqual(r2["final_url"], "https://consent.google.com/x")
+
+    def test_probe_counts_matches(self):
+        from momani_fetcher import probe
+        ok = validate.Probe(200, "u", "application/xml", rssd([("مدرسة في عبين", "https://p.example/1", "d", None, "", ""), ("خبر رياضي", "https://p.example/2", "d", None, "", "")]))
+        r = probe.probe_url("https://news.google.com/rss/search?q=x", KWS, lambda u: ok, lambda u: b"")
+        self.assertEqual((r["items"], r["matched"]), (2, 1))
+
+    def test_probe_connection_error(self):
+        from momani_fetcher import probe
+        def boom(u): raise feeds.FeedError("connection failed: URLError")
+        self.assertIn("error", probe.probe_url("https://www.bing.com/news/search?q=x", KWS, boom, lambda u: b""))
