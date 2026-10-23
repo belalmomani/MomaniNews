@@ -37,3 +37,11 @@ jobs:
           FETCH_PAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.pages || '1' }}
           FETCH_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
         run: python -m momani_fetcher.run
+      - name: Check article links
+        if: ${{ always() }}
+        continue-on-error: true
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m momani_fetcher.linkcheck
