@@ -18,13 +18,14 @@ CATCHUP_BUDGET = 400    # أقصى طلبات شبكة في التشغيل ال�
 BACKFILL_DAYS = 30      # الأثر الرجعي عند اكتشاف مصدر جديد
 BACKFILL_PAGES = 5
 BACKFILL_SITEMAP_PAGES = 40
-SEARCH_INTERVAL = timedelta(minutes=90)   # الاستعلامات الأساسية لا تُسأل كل 30 دقيقة (أدب مع الخدمة وتفادي الحجب)
+SEARCH_INTERVAL = timedelta(hours=3)     # الاستعلامات الأساسية لا تُسأل كل 30 دقيقة (أدب مع الخدمة وتفادي الحجب)
 EXT_INTERVAL = timedelta(hours=24)        # الاستعلامات الموسّعة (قائمة المالك): كل استعلام مرة يومياً على الأكثر
 EXT_PER_RUN = 15                          # وبحد أقصى 15 استعلاماً موسّعاً في الدورة (الأقدم فحصاً أولاً)
 SEARCH_PAUSE = 1.0                        # ثانية بين طلبات البحث
 MAX_ITEMS_PER_FEED = 200
 MAX_PAGES = 5          # حد أقصى لصفحات الخلاصة الأقدم (?paged=n) في وضع الاستكمال
 MAX_REJECT_SAMPLES = 15
+MAX_SEARCH_AGE = timedelta(days=365)   # نتيجة بحث أقدم من هذا لا تُقبل
 MAX_NOTED_DOMAINS = 40  # مرشحون جدد من داخل الأخبار في التشغيل الواحد
 
 
@@ -50,6 +51,9 @@ class Stats:
     source_hosts: set = field(default_factory=set)
     engines_down: set = field(default_factory=set)
     ext_total: int = 0
+    items_dropped_link: int = 0      # ذات صلة لكن بلا رابط https صالح (كانت تُحذف بصمت)
+    dropped_samples: list = field(default_factory=list)
+    engines_blocked: list = field(default_factory=list)
     found: dict = field(default_factory=lambda: defaultdict(set))   # بصمة الخبر ← {(محرك، رقم المصدر)} لقياس المساهمة الفريدة
     engines: dict = field(default_factory=dict)                # محرك ← أرقام مجمّعة (تُحسب في finalize)
     variants: list[dict] = field(default_factory=list)         # قياس كل استعلام بحث
@@ -87,7 +91,7 @@ class Stats:
         row["items_rejected"] = self.items_rejected
         row["reject_reasons"] = dict(self.reject_reasons)
         row["details"] = {"sources": self.sources[:60], "engines": self.engines, "variants": self.variants[:60], "health": self.health[:30],
-                          "requests": self.requests, "ext_total": self.ext_total, "search_skipped": self.search_skipped, "catchup_deferred": self.catchup_deferred}
+                          "dropped_no_https": self.items_dropped_link, "engines_blocked": self.engines_blocked, "requests": self.requests, "ext_total": self.ext_total, "search_skipped": self.search_skipped, "catchup_deferred": self.catchup_deferred}
         return row
 
 
@@ -237,10 +241,26 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
     rep["seen"] = len(items)
     candidates = []
     for it in items:
+        # قبل المطابقة: ناشر الداخل الفلسطيني، وخبر بحث قديم جداً (مثل «ليالي ميلاد 2013»)
+        block = None
+        if matcher.is_non_local_publisher(it.link, it.publisher_url, it.publisher):
+            block = matcher.R_NON_LOCAL
+        elif origin == "search" and it.published and it.published < now - MAX_SEARCH_AGE:
+            block = matcher.R_TOO_OLD
+        if block:
+            stats.items_rejected += 1
+            rep["rejected"] += 1
+            stats.reject_reasons[block] += 1
+            continue
         m = matcher.evaluate(it.title, it.summary, keywords, it.text)
         norm = dedup.normalize_url(it.link)
         if m.matched and norm:
             candidates.append((it, m, norm))
+        elif m.matched:
+            stats.items_dropped_link += 1      # مطابق لكن رابطه ليس https صالحاً: لا يُخزَّن، لكن يُحصى ويُعرض في التقرير
+            rep["dropped"] = rep.get("dropped", 0) + 1
+            if len(stats.dropped_samples) < 8:
+                stats.dropped_samples.append(f"{it.title[:70]} — {it.link[:70]} ({name})")
         elif not m.matched:
             stats.items_rejected += 1
             rep["rejected"] += 1
@@ -359,6 +379,20 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
                           and not (trigger == "schedule" and _age(s) > now - EXT_INTERVAL)], key=_age)[:EXT_PER_RUN]
         ext_ok = {s["id"] for s in ext_due}
         stats.ext_total = sum(1 for s in sources if queries.is_extended(s.get("name")))
+        # محرك بحث يمنع robots.txt جلب مساره: نتوقف عنده كله من البداية (لا نتحايل ولا نعدّ كل استعلام فشلاً)
+        checked: dict = {}
+        for s in sources:
+            if s.get("origin") == "search":
+                eng = queries.engine_of(s["url"])
+                if eng not in checked:
+                    try:
+                        checked[eng] = feeds.robots_allows(s["url"], counted)
+                    except Exception:  # noqa: BLE001
+                        checked[eng] = True
+                    if not checked[eng]:
+                        stats.engines_down.add(eng)
+                        stats.engines_blocked.append(eng)
+                        stats.health.append(f"{eng}: robots.txt لا يسمح بجلب نتائج البحث الآلي، فأُوقف هذا المحرك بالكامل (لا نتحايل على الحجب)")
         for s in sources:
             engine = queries.engine_of(s["url"])
             last = feeds.parse_date(s.get("last_success_at"), now)
@@ -423,6 +457,9 @@ def report(stats: Stats) -> str:
     via = [s["name"] for s in stats.sources if s.get("via")]
     if via:
         lines.append("- مصادر جُلبت عبر sitemap/صفحات (بلا RSS): " + "، ".join(via))
+    if stats.items_dropped_link:
+        lines.append(f"- ⚠ ذات صلة لكن بلا رابط https صالح (لم تُخزَّن): {stats.items_dropped_link}")
+        lines += [f"  - {x}" for x in stats.dropped_samples]
     if stats.search_skipped or stats.catchup_deferred:
         lines.append(f"- تخطّي استعلامات بحث (فاصل {int(SEARCH_INTERVAL.total_seconds() // 60)} دقيقة أو محرك محجوب): {stats.search_skipped} | استدراك مؤجَّل لنفاد الميزانية: {stats.catchup_deferred} | طلبات الشبكة: {stats.requests}")
     if stats.ext_total:
