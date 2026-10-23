@@ -1,5 +1,6 @@
 """جلب وتحليل RSS/Atom بأمان: https فقط، حد للحجم والوقت، رفض DOCTYPE/ENTITY (هجمات توسيع الكيانات)، وتجريد HTML."""
 import html
+import http.client
 import re
 import urllib.request
 import urllib.error
@@ -62,9 +63,22 @@ class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def safe_url(url: str) -> str:
+    """يرمّز الحروف غير اللاتينية في الرابط (روابط عربية في sitemap): http.client يرفض غير ASCII. ما رُمِّز سابقاً (%XX) لا يُرمَّز مرتين."""
+    from urllib.parse import quote, urlsplit, urlunsplit
+    p = urlsplit(url.strip())
+    keep = "/%:@&=+$,;~!*'()-._"
+    try:
+        host = p.netloc.encode("idna").decode("ascii") if not p.netloc.isascii() else p.netloc
+    except UnicodeError:
+        host = p.netloc
+    return urlunsplit((p.scheme, host, quote(p.path, safe=keep), quote(p.query, safe=keep + "?"), ""))
+
+
 def http_get(url: str) -> bytes:
     if not url.lower().startswith("https://"):
         raise FeedError("only https sources are allowed")
+    url = safe_url(url)
     opener = urllib.request.build_opener(_HttpsOnlyRedirect)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9"})
     try:
@@ -72,7 +86,7 @@ def http_get(url: str) -> bytes:
             data = r.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         raise FeedError(f"HTTP {e.code}") from None
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as e:   # ValueError يشمل UnicodeError
         raise FeedError(f"connection failed: {type(e).__name__}") from None
     if len(data) > MAX_BYTES:
         raise FeedError("response too large")

@@ -559,3 +559,77 @@ class ProbeTests(unittest.TestCase):
         from momani_fetcher import probe
         def boom(u): raise feeds.FeedError("connection failed: URLError")
         self.assertIn("error", probe.probe_url("https://www.bing.com/news/search?q=x", KWS, boom, lambda u: b""))
+
+
+class CrashIsolationTests(unittest.TestCase):
+    """أصل العطل الحقيقي: استثناء غير متوقع في مصدر واحد كان يُسقط الدورة كلها فلا تُجلب بقية المصادر ولا البحث."""
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_truncated_gzip_sitemap_is_a_feed_error_not_a_crash(self):
+        from momani_fetcher import pages
+        import gzip
+        data = gzip.compress(b"<urlset></urlset>" * 50)[:-6]
+        with self.assertRaises(feeds.FeedError):
+            pages.parse_sitemap(data)
+
+    def test_unexpected_exception_in_sitemap_fallback_does_not_kill_run(self):
+        good = rssd([("مدرسة في عبين", "https://good.example/1", "d", days(0), "", "")])
+        def f(u):
+            if u == "https://bad.example/feed": return b"<html><body>no feed</body></html>"
+            if u.endswith("/sitemap.xml") and "bad.example" in u: raise RuntimeError("boom")
+            if "bad.example" in u: raise feeds.FeedError("HTTP 404")
+            return good
+        st = Rec([{"id": 1, "name": "سيئ", "url": "https://bad.example/feed", "kind": "rss", "origin": "manual"},
+                  {"id": 2, "name": "جيد", "url": "https://good.example/feed", "kind": "rss", "origin": "manual"}], KWROWS)
+        stats = run.run(st, fetch=f, now=NOW)
+        self.assertEqual(stats.items_inserted, 1)             # المصدر الثاني عولج
+        self.assertEqual(st.results[2], (True, None))
+        self.assertFalse(st.results[1][0])
+
+    def test_any_exception_escaping_process_source_is_isolated_and_logged(self):
+        good = rssd([("مدرسة في عبين", "https://good.example/1", "d", days(0), "", "")])
+        class Boom(Rec):
+            def known_original_urls(self, urls):
+                if any("good.example" in u for u in urls): return super().known_original_urls(urls)
+                raise ValueError("weird")
+        def f(u): return good if "good.example" in u else rssd([("عبين خبر", "https://other.example/1", "d", days(0), "", "")])
+        st = Boom([{"id": 1, "name": "غريب", "url": "https://weird.example/feed", "kind": "rss", "origin": "manual"},
+                   {"id": 2, "name": "جيد", "url": "https://good.example/feed", "kind": "rss", "origin": "manual"}], KWROWS)
+        stats = run.run(st, fetch=f, now=NOW)
+        self.assertEqual(stats.sources_failed, 1)
+        self.assertEqual(stats.items_inserted, 1)
+        self.assertIn("ValueError", st.results[1][1])
+        self.assertEqual(len(st.failures), 1)
+        self.assertIn("finished", "finished" if "sources_total" in st.runs[0] else "")   # finish_run نُفِّذ
+
+
+class ArabicUrlTests(unittest.TestCase):
+    """أصل العطل الفعلي: رابط عربي غير مرمَّز في sitemap يرمي UnicodeEncodeError داخل http.client فيُسقط الدورة."""
+    def test_safe_url_encodes_arabic_and_keeps_encoded_parts(self):
+        u = feeds.safe_url("https://sosnews.example/خبر/عبين?q=مدرسة&page=2")
+        self.assertTrue(u.isascii())
+        self.assertIn("%D8%AE%D8%A8%D8%B1", u)
+        self.assertIn("page=2", u)
+        again = feeds.safe_url(u)
+        self.assertEqual(again, u)                       # لا ترميز مزدوج
+        self.assertEqual(feeds.safe_url("https://a.example/x/1?y=2"), "https://a.example/x/1?y=2")
+
+    def test_http_get_sends_ascii_request_for_arabic_url(self):
+        from unittest import mock
+        seen = []
+        class R:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s, n): return b"ok"
+        def fake_open(self, req, timeout=None):
+            seen.append(req.full_url); return R()
+        with mock.patch("urllib.request.OpenerDirector.open", fake_open):
+            self.assertEqual(feeds.http_get("https://s.example/خبر-عبين"), b"ok")
+        self.assertTrue(seen[0].isascii())
+
+    def test_unicode_error_becomes_feed_error_not_crash(self):
+        from unittest import mock
+        def boom(self, req, timeout=None): raise UnicodeEncodeError("ascii", "خ", 0, 1, "bad")
+        with mock.patch("urllib.request.OpenerDirector.open", boom):
+            with self.assertRaises(feeds.FeedError):
+                feeds.http_get("https://s.example/x")

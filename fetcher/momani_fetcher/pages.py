@@ -1,6 +1,7 @@
 """مصادر بلا RSS: sitemap وصفحات الأخبار. كل الطلبات https فقط، وتحترم robots.txt، وبحد أعلى لعدد الصفحات في الدورة.
 لا يُخزَّن من الصفحة إلا العنوان والمقتطف والرابط وتاريخ النشر (النص الكامل للمطابقة فقط)."""
 import gzip
+import zlib
 import re
 import time
 from datetime import datetime, timezone
@@ -84,7 +85,7 @@ def parse_sitemap(data: bytes) -> tuple[list[str], list[dict]]:
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)[:MAX_GZ_BYTES]
-        except OSError:
+        except (OSError, EOFError, zlib.error):
             raise FeedError("sitemap gzip غير صالح") from None
     if b"<!doctype" in data[:4096].lower() or b"<!entity" in data[:65536].lower():
         raise FeedError("DOCTYPE/ENTITY not allowed")

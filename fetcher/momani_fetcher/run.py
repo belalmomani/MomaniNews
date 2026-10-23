@@ -162,6 +162,10 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
                         break
                     except feeds.FeedError:
                         continue
+                    except StoreError:
+                        raise
+                    except Exception:  # noqa: BLE001 - sitemap معطوب لا يُسقط المصدر ولا الدورة
+                        continue
                 if items is None:
                     raise
         items = items[:MAX_ITEMS_PER_FEED]
@@ -380,9 +384,17 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
                     if any(x in err for x in refusal):
                         stats.engines_down.add(engine)   # قاطع دائرة: نتوقف عن بقية استعلامات هذا المحرك في الدورة
                         stats.health.append(f"{engine}: حجب/رفض ({err[:60]}) — أُوقفت بقية استعلاماته في هذه الدورة")
-            except StoreError as e:
+            except Exception as e:  # noqa: BLE001 - مصدر واحد معطوب لا يوقف بقية المصادر أبداً
                 stats.sources_failed += 1
-                stats.errors.append(f"{s.get('name')}: {e}")
+                msg = f"خطأ غير متوقع ({type(e).__name__}): {str(e)[:120]}"
+                stats.errors.append(f"{s.get('name')}: {msg}")
+                if stats.sources and stats.sources[-1].get("name") == s.get("name"):
+                    stats.sources[-1]["error"] = msg[:120]
+                try:
+                    store.source_result(s["id"], False, msg)
+                    store.log_failure(s["id"], s.get("url"), msg)
+                except Exception:  # noqa: BLE001
+                    pass
         stats.finalize()
     finally:
         store.finish_run(run_id, stats.as_row())

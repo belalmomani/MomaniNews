@@ -32,13 +32,13 @@ def http_probe(url: str) -> Probe:
     if not url.lower().startswith("https://"):
         raise feeds.FeedError("only https")
     opener = urllib.request.build_opener(feeds._HttpsOnlyRedirect)
-    req = urllib.request.Request(url, headers={"User-Agent": feeds.USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*;q=0.5"})
+    req = urllib.request.Request(feeds.safe_url(url), headers={"User-Agent": feeds.USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*;q=0.5"})
     try:
         with opener.open(req, timeout=feeds.TIMEOUT) as r:
             return Probe(r.status, r.geturl(), r.headers.get("Content-Type", ""), r.read(feeds.MAX_BYTES))
     except urllib.error.HTTPError as e:
         return Probe(e.code, url, e.headers.get("Content-Type", "") if e.headers else "", b"")
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         raise feeds.FeedError(f"connection failed: {type(e).__name__}") from None
 
 
