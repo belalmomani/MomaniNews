@@ -461,3 +461,75 @@ class LinkCheckJobTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExtendedSearchTests(unittest.TestCase):
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_extended_deduplicated_against_core_and_itself(self):
+        ext = queries.EXTENDED
+        self.assertEqual(len(ext), len(set(ext)))
+        from momani_fetcher.search_terms import _key
+        keys = [_key(q) for q in ext]
+        self.assertEqual(len(keys), len(set(keys)))
+        core = {_key(q) for q in queries.QUERIES}
+        self.assertFalse(core & set(keys))
+        self.assertNotIn("صخره عجلون", ext)          # = «صخرة عجلون» الأساسية بعد التطبيع
+        self.assertNotIn("عَبين", ext)
+        self.assertIn("أفراح المومني", ext)
+        self.assertIn("بلدية الجنيد", ext)
+        self.assertIn('"المومني" "عبين"', ext)
+        self.assertGreater(len(ext), 300)
+
+    def test_extended_rows_valid_and_unique(self):
+        rows = queries.extended_source_rows()
+        self.assertEqual(len({r["url"] for r in rows}), len(rows))
+        for r in rows:
+            self.assertTrue(queries.is_extended(r["name"]))
+            self.assertLessEqual(len(r["name"]), 120)
+            self.assertEqual((r["kind"], r["origin"]), ("rss", "search"))
+
+    def ext_sources(self, n=40, last=None):
+        return [src(i, f"https://news.google.com/rss/search?q=e{i}", name=queries.EXT_PREFIX + f"e{i}", last=last(i) if last else None) for i in range(1, n + 1)]
+
+    def test_only_a_batch_per_run_oldest_first(self):
+        calls = []
+        def f(u):
+            if not u.endswith("robots.txt"): calls.append(u)
+            return rssd([])
+        st = Rec(self.ext_sources(40, last=lambda i: (NOW - timedelta(days=2, hours=i)).isoformat() if i > 20 else None), KWROWS)
+        stats = run.run(st, "schedule", fetch=f, now=NOW)
+        self.assertEqual(len(calls), run.EXT_PER_RUN)
+        self.assertEqual(stats.search_skipped, 40 - run.EXT_PER_RUN)
+        self.assertTrue(all(any(f"q=e{i}" in c for c in calls) for i in range(1, 16)))   # لم تُفحص قط = الأولى
+
+    def test_checked_within_24h_not_repeated_on_schedule(self):
+        calls = []
+        def f(u):
+            if not u.endswith("robots.txt"): calls.append(u)
+            return rssd([])
+        recent = (NOW - timedelta(hours=5)).isoformat()
+        st = Rec(self.ext_sources(10, last=lambda i: recent), KWROWS)
+        run.run(st, "schedule", fetch=f, now=NOW)
+        self.assertEqual(calls, [])
+
+    def test_pause_between_search_requests(self):
+        pauses = []
+        st = Rec(self.ext_sources(3), KWROWS)
+        run.run(st, "schedule", fetch=lambda u: rssd([]), now=NOW, pause=pauses.append)
+        self.assertEqual(pauses, [run.SEARCH_PAUSE] * 3)
+
+    def test_google_429_stops_all_search(self):
+        calls = []
+        def f(u):
+            if not u.endswith("robots.txt"): calls.append(u)
+            raise feeds.FeedError("HTTP 429")
+        st = Rec(self.ext_sources(10), KWROWS)
+        stats = run.run(st, "schedule", fetch=f, now=NOW)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(any("حجب" in h for h in stats.health))
+
+    def test_new_keywords_junaid_and_plural(self):
+        self.assertTrue(matcher.evaluate("تعزية المومنيين في الجنيد", "", KWS).matched)
+        self.assertFalse(matcher.evaluate("بلدية الجنيد تعلن مناقصة", "", KWS).matched)   # سياق وحده لا يكفي
+        self.assertFalse(matcher.evaluate("الوزير المومنيين يصرح", "", KWS).matched)   # الاسم وحده بلا سياق

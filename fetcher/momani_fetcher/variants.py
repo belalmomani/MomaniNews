@@ -13,7 +13,9 @@ ENTITIES = {
 
 # صيغ لاتينية ملتصقة/بشرطة لا تلتقطها كلمة «momani» بعد التطبيع
 EXTRA_KEYWORDS = [("almomani", None, "name", False), ("almomany", None, "name", False), ("momany", None, "name", False),
-                  ("ibleen", "abelin", "alias", False), ("sakhrah", "sakhra", "alias", True)]
+                  ("ibleen", "abelin", "alias", False), ("sakhrah", "sakhra", "alias", True),
+                  ("مومنيين", None, "name", False),     # جمع «المومنيين» لا تلتقطه «مومني»
+                  ("الجنيد", None, "context", False)]   # بلدية/قضاء الجنيد: سياق محلي (لا يكفي وحده؛ المنطقة غير محدّدة)
 
 
 def forms(entity: str) -> list[str]:

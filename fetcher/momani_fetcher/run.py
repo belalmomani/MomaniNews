@@ -18,7 +18,10 @@ CATCHUP_BUDGET = 400    # أقصى طلبات شبكة في التشغيل ال�
 BACKFILL_DAYS = 30      # الأثر الرجعي عند اكتشاف مصدر جديد
 BACKFILL_PAGES = 5
 BACKFILL_SITEMAP_PAGES = 40
-SEARCH_INTERVAL = timedelta(minutes=90)   # محركات البحث لا تُسأل كل 30 دقيقة (أدب مع الخدمة وتفادي الحجب)
+SEARCH_INTERVAL = timedelta(minutes=90)   # الاستعلامات الأساسية لا تُسأل كل 30 دقيقة (أدب مع الخدمة وتفادي الحجب)
+EXT_INTERVAL = timedelta(hours=24)        # الاستعلامات الموسّعة (قائمة المالك): كل استعلام مرة يومياً على الأكثر
+EXT_PER_RUN = 15                          # وبحد أقصى 15 استعلاماً موسّعاً في الدورة (الأقدم فحصاً أولاً)
+SEARCH_PAUSE = 1.0                        # ثانية بين طلبات البحث
 MAX_ITEMS_PER_FEED = 200
 MAX_PAGES = 5          # حد أقصى لصفحات الخلاصة الأقدم (?paged=n) في وضع الاستكمال
 MAX_REJECT_SAMPLES = 15
@@ -46,6 +49,7 @@ class Stats:
     from_news_domains: int = 0                                  # نطاقات مرشحة اكتُشفت من داخل الأخبار
     source_hosts: set = field(default_factory=set)
     engines_down: set = field(default_factory=set)
+    ext_total: int = 0
     found: dict = field(default_factory=lambda: defaultdict(set))   # بصمة الخبر ← {(محرك، رقم المصدر)} لقياس المساهمة الفريدة
     engines: dict = field(default_factory=dict)                # محرك ← أرقام مجمّعة (تُحسب في finalize)
     variants: list[dict] = field(default_factory=list)         # قياس كل استعلام بحث
@@ -83,7 +87,7 @@ class Stats:
         row["items_rejected"] = self.items_rejected
         row["reject_reasons"] = dict(self.reject_reasons)
         row["details"] = {"sources": self.sources[:60], "engines": self.engines, "variants": self.variants[:60], "health": self.health[:30],
-                          "requests": self.requests, "search_skipped": self.search_skipped, "catchup_deferred": self.catchup_deferred}
+                          "requests": self.requests, "ext_total": self.ext_total, "search_skipped": self.search_skipped, "catchup_deferred": self.catchup_deferred}
         return row
 
 
@@ -320,7 +324,7 @@ def backfill_source(store, source: dict, keywords: list[matcher.Keyword], fetch=
     return {"error": rep.get("error"), "seen": st.items_seen, "matched": st.items_matched, "inserted": st.items_inserted, "duplicate": st.items_duplicate}
 
 
-def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, sleep=None, now: datetime | None = None) -> Stats:
+def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, sleep=None, now: datetime | None = None, pause=None) -> Stats:
     stats = Stats()
     run_id = store.start_run(trigger)
     now = now or datetime.now(timezone.utc)
@@ -334,7 +338,7 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
         ensure = getattr(store, "upsert_sources", None)
         if ensure:
             try:
-                ensure(queries.search_source_rows())
+                ensure(queries.search_source_rows() + queries.extended_source_rows())
             except StoreError as e:
                 stats.errors.append(f"تسجيل استعلامات البحث: {e}")
         sources = store.active_sources()
@@ -343,6 +347,14 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
         stats.source_hosts = {_host_of(s["url"]) for s in sources if s.get("origin") != "search"}
         if not keywords:
             stats.errors.append("لا توجد كلمات مفتاحية مفعّلة")
+        # الموسّعة: الأقدم فحصاً أولاً (لم تُفحص قط = الأقدم)، ويُسمح بدفعة محدودة فقط في الدورة
+        def _age(s):
+            d = feeds.parse_date(s.get("last_success_at"), now)
+            return d or datetime.min.replace(tzinfo=timezone.utc)
+        ext_due = sorted([s for s in sources if queries.is_extended(s.get("name"))
+                          and not (trigger == "schedule" and _age(s) > now - EXT_INTERVAL)], key=_age)[:EXT_PER_RUN]
+        ext_ok = {s["id"] for s in ext_due}
+        stats.ext_total = sum(1 for s in sources if queries.is_extended(s.get("name")))
         for s in sources:
             engine = queries.engine_of(s["url"])
             last = feeds.parse_date(s.get("last_success_at"), now)
@@ -350,15 +362,22 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
                 if engine in stats.engines_down:
                     stats.search_skipped += 1          # المحرك رفض/حجب في هذه الدورة: لا نواصل الطرق عليه
                     continue
-                if trigger == "schedule" and last and now - last < SEARCH_INTERVAL:
+                if queries.is_extended(s.get("name")):
+                    if s["id"] not in ext_ok:
+                        stats.search_skipped += 1
+                        continue
+                elif trigger == "schedule" and last and now - last < SEARCH_INTERVAL:
                     stats.search_skipped += 1
                     continue
+                if pause:
+                    pause(SEARCH_PAUSE)
             try:
                 before = stats.sources_failed
                 process_source(store, s, keywords, stats, counted, pages, sleep, now)
-                if s.get("origin") == "search" and stats.sources_failed > before and engine != queries.ENGINE_GOOGLE:
+                if s.get("origin") == "search" and stats.sources_failed > before:
                     err = stats.sources[-1].get("error") or ""
-                    if any(x in err for x in ("robots", "HTTP 403", "HTTP 429", "لم يُعثر على خلاصة")):
+                    refusal = ("robots", "HTTP 403", "HTTP 429") if engine == queries.ENGINE_GOOGLE else ("robots", "HTTP 403", "HTTP 429", "لم يُعثر على خلاصة")
+                    if any(x in err for x in refusal):
                         stats.engines_down.add(engine)   # قاطع دائرة: نتوقف عن بقية استعلامات هذا المحرك في الدورة
                         stats.health.append(f"{engine}: حجب/رفض ({err[:60]}) — أُوقفت بقية استعلاماته في هذه الدورة")
             except StoreError as e:
@@ -394,6 +413,9 @@ def report(stats: Stats) -> str:
         lines.append("- مصادر جُلبت عبر sitemap/صفحات (بلا RSS): " + "، ".join(via))
     if stats.search_skipped or stats.catchup_deferred:
         lines.append(f"- تخطّي استعلامات بحث (فاصل {int(SEARCH_INTERVAL.total_seconds() // 60)} دقيقة أو محرك محجوب): {stats.search_skipped} | استدراك مؤجَّل لنفاد الميزانية: {stats.catchup_deferred} | طلبات الشبكة: {stats.requests}")
+    if stats.ext_total:
+        done = sum(1 for s in stats.sources if queries.is_extended(s["name"]))
+        lines.append(f"- استعلامات البحث الموسّعة: {stats.ext_total} مسجّلة، فُحص منها في هذه الدورة {done} (دفعة دوّارة، كل استعلام مرة يومياً)")
     if stats.from_news_domains:
         lines.append(f"- مواقع مرشحة اكتُشفت من داخل الأخبار (تُفحص في مهمة الاكتشاف): {stats.from_news_domains}")
     if stats.health:
@@ -436,7 +458,8 @@ def main() -> int:
     except ValueError:
         pages = 1
     try:
-        stats = run(SupabaseStore(url, key), os.environ.get("FETCH_TRIGGER", "schedule"), pages=pages)
+        import time
+        stats = run(SupabaseStore(url, key), os.environ.get("FETCH_TRIGGER", "schedule"), pages=pages, pause=time.sleep)
     except StoreError as e:
         print(f"فشل الاتصال بقاعدة البيانات: {e}", file=sys.stderr)
         return 1

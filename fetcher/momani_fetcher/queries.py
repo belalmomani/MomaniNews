@@ -1,7 +1,7 @@
 """استعلامات البحث (Google News RSS) المتنوعة لكل منطقة والعشيرة: تهجئات، تشكيل، صيغ اجتماعية (وفاة/تعزية/تهنئة/نجاح/تكريم)."""
 from urllib.parse import quote
 
-from . import variants
+from . import search_terms, variants
 
 SOCIAL = "وفاة OR تعزية OR تهنئة OR نجاح OR تكريم OR حفل"
 PLACES = {
@@ -35,6 +35,10 @@ ENGINES = (ENGINE_GOOGLE, ENGINE_BING)
 BING_QUERIES = QUERIES[:12]   # عدد أقل: لا نُغرق محركاً ثانوياً؛ القياس يقرّر التوسع
 
 
+EXT_PREFIX = "بحث موسّع Google News: "
+EXTENDED: list[str] = search_terms.extended(QUERIES)   # عبارات المالك الموسّعة (تدور على دفعات)
+
+
 def google_news_url(q: str) -> str:
     return "https://news.google.com/rss/search?q=" + quote(q) + "&hl=ar&gl=JO&ceid=JO:ar"
 
@@ -60,3 +64,11 @@ def search_source_rows() -> list[dict]:
         if q in BING_QUERIES:
             rows.append({"name": f"بحث Bing News: {label}"[:120], "url": bing_news_url(q), "kind": "rss", "origin": "search"})
     return rows
+
+
+def extended_source_rows() -> list[dict]:
+    return [{"name": (EXT_PREFIX + (q if len(q) <= 80 else q[:77] + "…"))[:120], "url": google_news_url(q), "kind": "rss", "origin": "search"} for q in EXTENDED]
+
+
+def is_extended(name: str) -> bool:
+    return (name or "").startswith(EXT_PREFIX)
