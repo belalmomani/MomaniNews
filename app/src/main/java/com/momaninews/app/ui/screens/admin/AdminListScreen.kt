@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+
 package com.momaninews.app.ui.screens.admin
 
 import androidx.compose.foundation.BorderStroke
@@ -70,7 +72,7 @@ class AdminTab(
 private class PendingAction(val item: AdminItem, val action: AdminAction)
 private class PendingBulk(val action: BulkAction, val items: List<AdminItem>)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
     var tabIndex by remember { mutableIntStateOf(0) }
