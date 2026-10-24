@@ -84,6 +84,7 @@ fun NewsCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                NewsMenu(news)
             }
 
             // النص (يفتح الخبر)

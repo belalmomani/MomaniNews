@@ -45,6 +45,11 @@ object FollowStore {
             ?.map { FollowLogic.key(it) }?.filter { it.isNotEmpty() }?.take(FollowLogic.MAX_FOLLOWED)?.toSet() ?: emptySet()
     }
 
+    /** يتابع المصدر إن لم يكن متابَعاً (لا يلغي المتابعة). */
+    fun follow(source: String) {
+        if (FollowLogic.key(source) !in state.value) toggle(source)
+    }
+
     fun toggle(source: String) {
         val next = FollowLogic.toggle(state.value, source)
         if (next == state.value) return

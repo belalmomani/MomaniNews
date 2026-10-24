@@ -74,6 +74,7 @@ fun HomeScreen(
     onSignInClick: () -> Unit = {},
     onComposeClick: () -> Unit = {},
     onMyPostsClick: () -> Unit = {},
+    onSavedClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val auth = AuthRepositories.default
@@ -83,7 +84,8 @@ fun HomeScreen(
     var searchOpen by remember { mutableStateOf(false) }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val visibleNews = state.visibleNews
+    val hiddenIds by com.momaninews.app.data.settings.PostPrefs.hidden.collectAsStateWithLifecycle()
+    val visibleNews = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
     val errorMessage = state.errorMessage
 
     ModalNavigationDrawer(
@@ -99,6 +101,7 @@ fun HomeScreen(
                         DrawerAction.REGION -> viewModel.onRegionSelected(e.regionId)
                         DrawerAction.NOTIFICATIONS -> onNotificationsClick()
                         DrawerAction.MY_POSTS -> onMyPostsClick()
+                        DrawerAction.SAVED -> onSavedClick()
                         DrawerAction.AD_REQUEST -> onAdRequestClick()
                         DrawerAction.VERIFICATION -> onVerificationClick()
                         DrawerAction.SETTINGS -> onSettingsClick()
@@ -226,8 +229,10 @@ fun HomeScreen(
                             }
                             item(key = "featured") {
                                 val followed by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
-                                val stories = remember(state.featured, followed) {
-                                    com.momaninews.app.data.settings.FollowLogic.prioritize(state.featured, followed)
+                                val stories = remember(state.featured, followed, hiddenIds) {
+                                    com.momaninews.app.data.settings.FollowLogic.prioritize(
+                                        com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.featured, hiddenIds.toSet()), followed
+                                    )
                                         .take(com.momaninews.app.data.repository.STORY_COUNT)
                                 }
                                 com.momaninews.app.ui.components.FeaturedStrip(

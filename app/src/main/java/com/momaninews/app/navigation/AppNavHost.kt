@@ -51,7 +51,8 @@ fun AppNavHost() {
                 onAdminClick = { navController.navigate(Routes.ADMIN) },
                 onSignInClick = { navController.navigate(Routes.SIGN_IN) },
                 onComposeClick = { navController.navigate(Routes.POST_NEW) },
-                onMyPostsClick = { navController.navigate(Routes.MY_POSTS) }
+                onMyPostsClick = { navController.navigate(Routes.MY_POSTS) },
+                onSavedClick = { navController.navigate(Routes.SAVED) }
             )
         }
         composable(Routes.POST_NEW) {
@@ -90,6 +91,12 @@ fun AppNavHost() {
                 onAdRequestClick = { navController.navigate(Routes.AD_REQUEST) },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 onAdminClick = { navController.navigate(Routes.ADMIN) }
+            )
+        }
+        composable(Routes.SAVED) {
+            com.momaninews.app.ui.screens.saved.SavedScreen(
+                onBack = { navController.popBackStack() },
+                onNewsClick = { id -> navController.navigate(Routes.newsDetail(id)) }
             )
         }
         composable(Routes.ADMIN) { AdminHomeScreen(onBack = { navController.popBackStack() }, onOpen = { navController.navigate(it) }) }

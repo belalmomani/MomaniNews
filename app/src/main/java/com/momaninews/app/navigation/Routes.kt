@@ -11,6 +11,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val POST_NEW = "post/new"
     const val MY_POSTS = "my_posts"
+    const val SAVED = "saved"
     const val ADMIN = "admin"
     const val ADMIN_NEWS = "admin/news"
     const val ADMIN_ADD_NEWS = "admin/addnews"
