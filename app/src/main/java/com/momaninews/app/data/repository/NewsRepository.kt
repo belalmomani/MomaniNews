@@ -19,9 +19,12 @@ interface NewsRepository {
     /** يسجّل مشاهدة (مؤشر تقريبي). الافتراضي: لا شيء. */
     suspend fun trackView(newsId: Int) {}
 
-    /** «أبرز الأخبار» لشريط الرئيسية. الافتراضي: لا شيء. */
-    suspend fun getFeatured(): List<NewsItem> = emptyList()
+    /** «القصص»: أحدث [limit] أخبار معتمدة (من المدير أو من المستخدمين) لشريط الرئيسية. */
+    suspend fun getStories(limit: Int = STORY_COUNT): List<NewsItem> = getNews().sortedByDescending { it.id }.take(limit)
 
     /** حجم الصفحة؛ إن رجع أقل منه فلا يوجد المزيد. */
     val pageSize: Int get() = Int.MAX_VALUE
 }
+
+/** عدد بطاقات القصص في الرئيسية. */
+const val STORY_COUNT = 10

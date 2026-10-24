@@ -108,7 +108,7 @@ class HomeViewModel(
             try {
                 val items = repository.getNews(0, _uiState.value.sort)
                 // الشريط اختياري: فشله لا يمنع عرض الأخبار
-                val featured = try { repository.getFeatured() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+                val featured = try { repository.getStories() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
                 _uiState.update {
                     it.copy(
                         isLoading = false,

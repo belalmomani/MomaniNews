@@ -80,7 +80,7 @@ fun FeaturedStrip(
     Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
         Column(modifier = Modifier.padding(top = 10.dp, bottom = 12.dp)) {
             Text(
-                "أبرز الأخبار", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                "آخر الأخبار", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
             LazyRow(
