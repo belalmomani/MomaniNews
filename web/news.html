@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta property="og:site_name" content="المومني نيوز">
+<meta property="og:type" content="article">
+<meta property="og:title" content="المومني نيوز — أخبار عبين وعبلين وصخرة">
+<meta name="description" content="أخبار محلية معتمدة من عبين وعبلين وصخرة">
+<title>المومني نيوز</title>
+<style>
+  body { margin:0; font-family:system-ui,"Segoe UI",Tahoma,sans-serif; background:#f6f3ea; color:#2b2b2b; line-height:1.9 }
+  header { background:#0a4e9e; color:#fff; padding:14px 16px; font-weight:700 }
+  main { max-width:720px; margin:0 auto; padding:18px 16px 48px }
+  .tag { display:inline-block; background:#e5ecf7; color:#0a4e9e; border-radius:999px; padding:2px 12px; font-size:13px }
+  h1 { font-size:24px; line-height:1.5; margin:10px 0 }
+  .meta { color:#6b6b6b; font-size:14px }
+  img { max-width:100%; border-radius:10px }
+  p { margin:12px 0; white-space:pre-wrap }
+  .btn { display:inline-block; background:#0a4e9e; color:#fff; padding:10px 18px; border-radius:10px; text-decoration:none; margin:6px 0 }
+  .note { background:#fff6d6; border:1px solid #e3d28a; padding:8px 12px; border-radius:8px; font-size:14px }
+  #err { color:#a32121 }
+</style>
+</head>
+<body>
+<header>المومني نيوز</header>
+<main id="m"><p id="status">جارٍ التحميل…</p></main>
+<script>
+"use strict";
+const CFG = { url: "https://jpnifyumqmkbgxcqnyqb.supabase.co", key: "sb_publishable_sVF84cWS-dNvYn72x1risQ_z1_ewOUp" };
+const m = document.getElementById("m");
+
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+function httpsOnly(u) { try { const x = new URL(u); return x.protocol === "https:" ? x.href : null; } catch (e) { return null; } }
+function show(msg) { m.replaceChildren(el("p", msg, "err")); }
+
+async function main() {
+  const id = new URLSearchParams(location.search).get("id");
+  if (!/^[0-9]{1,18}$/.test(id || "")) return show("رابط الخبر غير صالح.");
+  let rows;
+  try {
+    const q = "news?select=id,title,excerpt,content,source_name,published_at,original_url,image_url,regions(name_ar)&status=eq.approved&id=eq." + id + "&limit=1";
+    const r = await fetch(CFG.url + "/rest/v1/" + q, { headers: { apikey: CFG.key, Accept: "application/json" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    rows = await r.json();
+  } catch (e) { return show("تعذر تحميل الخبر. حاول لاحقاً."); }
+  if (!rows.length) return show("الخبر غير موجود أو غير منشور.");
+  const n = rows[0];
+  document.title = n.title + " — المومني نيوز";
+  const og = document.querySelector('meta[property="og:title"]'); if (og) og.content = n.title;
+
+  const box = document.createDocumentFragment();
+  if (n.regions && n.regions.name_ar) box.append(el("span", n.regions.name_ar, "tag"));
+  box.append(el("h1", n.title));
+  const date = n.published_at ? new Date(n.published_at).toLocaleDateString("ar", { year: "numeric", month: "long", day: "numeric" }) : "";
+  box.append(el("div", [n.source_name, date].filter(Boolean).join(" • "), "meta"));
+  const img = n.image_url && httpsOnly(n.image_url);
+  if (img) { const i = document.createElement("img"); i.src = img; i.alt = ""; i.referrerPolicy = "no-referrer"; box.append(i); }
+  const src = n.original_url && httpsOnly(n.original_url);
+  // الخبر المنقول من مصدر خارجي: نعرض المقتطف فقط والتفاصيل عند المصدر (حقوق النشر)
+  const text = src ? (n.excerpt || "") : (n.content || n.excerpt || "");
+  text.split(/\n{2,}/).filter(s => s.trim()).forEach(s => box.append(el("p", s)));
+  if (src) {
+    box.append(el("p", "الخبر منقول باختصار من «" + (n.source_name || "المصدر") + "». التفاصيل الكاملة عند المصدر.", "note"));
+    const a = el("a", "فتح المصدر", "btn"); a.href = src; a.rel = "noopener noreferrer nofollow"; box.append(a);
+  }
+  m.replaceChildren(box);
+}
+main();
+</script>
+</body>
+</html>

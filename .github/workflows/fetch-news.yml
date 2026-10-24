@@ -1,0 +1,39 @@
+name: Fetch news (RSS)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # كل 30 دقيقة (قد يتأخر GitHub بضع دقائق)
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "صفحات الخلاصة الأقدم لكل مصدر (1 = الأحدث فقط، حتى 5 لاستكمال الأخبار الأقدم)"
+        required: false
+        default: "1"
+
+concurrency:
+  group: fetch-news
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        working-directory: fetcher
+        run: python -m unittest discover -s tests -t .
+      - name: Fetch
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FETCH_PAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.pages || '1' }}
+          FETCH_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
+        run: python -m momani_fetcher.run
