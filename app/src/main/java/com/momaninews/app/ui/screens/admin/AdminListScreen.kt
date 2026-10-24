@@ -5,8 +5,11 @@ package com.momaninews.app.ui.screens.admin
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.FlowRow
@@ -43,6 +46,9 @@ import com.momaninews.app.ui.components.ScreenScaffold
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+/** مجموعة خيارات (رقائق) في نموذج الإضافة: (النص المعروض، القيمة). الأول افتراضي. */
+class ChoiceGroup(val title: String, val options: List<Pair<String, String>>)
+
 /** إجراء على عنصر. [confirm] يطلب تأكيداً، و[prompt] يطلب إدخال نص (يُمرَّر إلى [run]). */
 class AdminAction(
     val label: String,
@@ -50,6 +56,9 @@ class AdminAction(
     val confirm: String? = null,
     val prompt: String? = null,
     val promptDefault: String = "",
+    /** نموذج بخيارات تحت حقل النص؛ [compose] يحوّل (النص، القيم المختارة) إلى المدخل الذي يستلمه [run]. */
+    val groups: List<ChoiceGroup> = emptyList(),
+    val compose: ((text: String, picks: List<String>) -> String)? = null,
     val run: suspend (item: AdminItem, input: String?) -> Unit
 )
 
@@ -84,6 +93,7 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
     var busy by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<PendingAction?>(null) }
     var input by remember { mutableStateOf("") }
+    var picks by remember { mutableStateOf<List<String>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingBulk by remember { mutableStateOf<PendingBulk?>(null) }
     val scope = rememberCoroutineScope()
@@ -198,6 +208,7 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
                             val p = PendingAction(item, action)
                             if (action.confirm != null || action.prompt != null) {
                                 input = action.promptDefault
+                                picks = action.groups.map { g -> g.options.first().second }
                                 pending = p
                             } else execute(p, null)
                         }
@@ -235,17 +246,34 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
             onDismissRequest = { pending = null },
             title = { Text(p.action.label) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     p.action.confirm?.let { Text(it) }
                     p.action.prompt?.let {
-                        OutlinedTextField(value = input, onValueChange = { v -> input = v.take(500) }, label = { Text(it) }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = input, onValueChange = { v -> input = v.take(if (p.action.groups.isEmpty()) 500 else 2000) },
+                            label = { Text(it) }, modifier = Modifier.fillMaxWidth(),
+                            minLines = if (p.action.groups.isEmpty()) 1 else 3
+                        )
+                    }
+                    p.action.groups.forEachIndexed { gi, g ->
+                        Text(g.title, style = MaterialTheme.typography.labelLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            g.options.forEach { (label, value) ->
+                                FilterChip(
+                                    selected = picks.getOrNull(gi) == value,
+                                    onClick = { picks = picks.toMutableList().also { l -> if (gi < l.size) l[gi] = value } },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     pending = null
-                    execute(p, if (p.action.prompt != null) input else null)
+                    val composed = p.action.compose?.invoke(input, picks) ?: input
+                    execute(p, if (p.action.prompt != null) composed else null)
                 }) { Text("موافق") }
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text("إلغاء") } }

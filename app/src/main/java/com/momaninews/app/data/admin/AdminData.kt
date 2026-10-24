@@ -83,6 +83,16 @@ object AdminRules {
         return KeywordInput(kind, word, region, ctx)
     }
 
+    /**
+     * من نموذج الإضافة السهل إلى أسطر بالصيغة القديمة (سطر لكل كلمة). الكلمات مفصولة بسطر جديد أو فاصلة (، ,).
+     * المنطقة تُلصق فقط لنوع region/alias إن اختيرت (وإلا تُستنتج من الكلمة). فارغ = لا كلمات.
+     */
+    fun composeKeywordLines(words: String, kind: String, regionId: String): String =
+        words.split(Regex("[\\n\\r،,]")).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n") { w ->
+            val region = if ((kind == "region" || kind == "alias") && regionId in REGION_IDS) " $regionId" else ""
+            "$kind $w$region"
+        }
+
     /** مدة الإعلان المسموحة بالأيام (نفس لوحة الويب). null إن كانت غير صالحة. */
     fun parseDays(text: String?): Int? = text?.trim()?.toIntOrNull()?.takeIf { it in 1..365 }
 

@@ -92,8 +92,26 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                 AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") }
             ) },
             AdminTab("عمليات الجلب", "لا توجد عمليات جلب بعد", { r.fetchRuns() }) { emptyList() },
-            AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "اكتب: النوع ثم الكلمة ثم المنطقة. أمثلة: region عبين abeen | استبعاد قبة الصخرة | سياق كفرنجة")) + r.keywords() }) { k ->
-                if (k.ref == "add") listOf(AdminAction("إضافة", prompt = "النوع الكلمة [abeen/abelin/sakhra/momani] [ctx]") { _, text -> r.addKeyword(text ?: "") })
+            AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "اكتب الكلمة ثم اختر نوعها. يمكنك كتابة عدة كلمات، كلمة في كل سطر.")) + r.keywords() }) { k ->
+                if (k.ref == "add") listOf(AdminAction(
+                    "إضافة",
+                    prompt = "الكلمة (أو عدة كلمات، كلمة في كل سطر)",
+                    groups = listOf(
+                        ChoiceGroup("نوع الكلمة", listOf(
+                            "استبعاد: ارفض أي خبر يحويها" to "exclude",
+                            "منطقة: اسم بلدة أو منطقة" to "region",
+                            "سياق: كلمة تدل أن الخبر محلي" to "context"
+                        )),
+                        ChoiceGroup("المنطقة (لنوع «منطقة» فقط)", listOf(
+                            "تلقائي" to "", "عبين" to "abeen", "عبلين" to "abelin", "صخرة" to "sakhra", "المومني" to "momani"
+                        ))
+                    ),
+                    compose = { w, p -> com.momaninews.app.data.admin.AdminRules.composeKeywordLines(w, p[0], p[1]) }
+                ) { _, text ->
+                    val lines = (text ?: "").lines().filter { it.isNotBlank() }
+                    require(lines.isNotEmpty())
+                    lines.forEach { r.addKeyword(it) }
+                })
                 else listOf(
                     AdminAction(if (k.flag) "تعطيل" else "تفعيل") { i, _ -> r.setKeywordActive(i.ref, !i.flag) },
                     AdminAction("حذف", danger = true, confirm = "حذف الكلمة؟") { i, _ -> r.deleteKeyword(i.ref) }

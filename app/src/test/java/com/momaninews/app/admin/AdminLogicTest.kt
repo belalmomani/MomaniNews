@@ -226,4 +226,14 @@ class AdminLogicTest {
             try { AdminRules.idList(bad); throw AssertionError("accepted $bad") } catch (e: IllegalArgumentException) { }
         }
     }
+
+    @Test fun composeKeywordLines_batchAndRegion() {
+        assertEquals("exclude قبة الصخرة\nexclude الكرك", AdminRules.composeKeywordLines("قبة الصخرة\nالكرك", "exclude", ""))
+        assertEquals("exclude أ\nexclude ب", AdminRules.composeKeywordLines("أ، ب,  ", "exclude", "abeen")) // المنطقة لا تُلصق للاستبعاد
+        assertEquals("region مالطا abeen", AdminRules.composeKeywordLines("مالطا", "region", "abeen"))
+        assertEquals("region عبين", AdminRules.composeKeywordLines("عبين", "region", ""))
+        assertEquals("", AdminRules.composeKeywordLines("  \n ", "exclude", ""))
+        // الناتج يُفهم بالمحلّل القديم
+        assertEquals("قبة الصخرة", AdminRules.parseKeywordInput(AdminRules.composeKeywordLines("قبة الصخرة", "exclude", ""))!!.word)
+    }
 }
