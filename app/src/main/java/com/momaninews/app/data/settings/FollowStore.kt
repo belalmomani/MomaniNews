@@ -20,6 +20,10 @@ object FollowLogic {
         return mine + rest
     }
 
+    /** أخبار المصادر المتابَعة فقط (بالترتيب الأصلي). */
+    fun onlyFollowed(items: List<NewsItem>, followed: Set<String>): List<NewsItem> =
+        items.filter { key(it.source) in followed }
+
     fun toggle(followed: Set<String>, source: String): Set<String> {
         val k = key(source)
         if (k.isEmpty()) return followed

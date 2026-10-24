@@ -85,7 +85,17 @@ fun HomeScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val hiddenIds by com.momaninews.app.data.settings.PostPrefs.hidden.collectAsStateWithLifecycle()
-    val visibleNews = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
+    val followedSet by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
+    var followedOnly by remember { mutableStateOf(false) }
+    val notHidden = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
+    val visibleNews = if (followedOnly) com.momaninews.app.data.settings.FollowLogic.onlyFollowed(notHidden, followedSet) else notHidden
+
+    // في عرض «المتابَعة» نكمل جلب الصفحات تلقائياً (بحد أقصى) حتى تظهر أخبار كافية من المصادر المتابَعة
+    androidx.compose.runtime.LaunchedEffect(followedOnly, followedSet, state.allNews.size, state.canLoadMore, state.isLoadingMore, state.loadMoreFailed) {
+        if (followedOnly && followedSet.isNotEmpty() && visibleNews.size < 10 && state.canLoadMore &&
+            !state.isLoadingMore && !state.loadMoreFailed && !state.isLoading && state.allNews.size < 300
+        ) viewModel.loadMore()
+    }
     val errorMessage = state.errorMessage
 
     ModalNavigationDrawer(
@@ -177,6 +187,13 @@ fun HomeScreen(
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item(key = "followed-chip") {
+                    FilterChip(
+                        selected = followedOnly,
+                        onClick = { followedOnly = !followedOnly },
+                        label = { Text("★ متابَعة") }
+                    )
+                }
                 items(com.momaninews.app.data.repository.NewsSort.entries.toList()) { option ->
                     FilterChip(
                         selected = state.sort == option,
@@ -205,7 +222,14 @@ fun HomeScreen(
                             displayName = user?.displayName,
                             onClick = { if (user == null) onSignInClick() else onComposeClick() }
                         )
-                        EmptyState(
+                        if (followedOnly) {
+                            com.momaninews.app.ui.components.MessageState(
+                                title = if (followedSet.isEmpty()) "لا تتابع أي مصدر بعد" else "لا أخبار من مصادرك المتابَعة حالياً",
+                                message = if (followedSet.isEmpty()) "اضغط ⋯ على أي خبر ثم «مهتم» لمتابعة مصدره." else "جرّب لاحقاً أو أزل التصفية.",
+                                actionLabel = "عرض كل الأخبار",
+                                onAction = { followedOnly = false }
+                            )
+                        } else EmptyState(
                             hasActiveFilter = state.hasActiveFilter,
                             onClearFilters = viewModel::clearFilters
                         )

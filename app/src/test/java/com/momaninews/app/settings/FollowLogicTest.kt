@@ -39,4 +39,10 @@ class FollowLogicTest {
         assertEquals(full, FollowLogic.toggle(full, "extra"))
         assertEquals(full - "s1", FollowLogic.toggle(full, "s1"))
     }
+
+    @Test fun onlyFollowed_filtersKeepingOrder() {
+        val items = listOf(n(5, "عمون"), n(4, "Saraya"), n(3, "عمون"), n(2, "petra"))
+        assertEquals(listOf(4, 2), FollowLogic.onlyFollowed(items, setOf("saraya", "petra")).map { it.id })
+        assertTrue(FollowLogic.onlyFollowed(items, emptySet()).isEmpty())
+    }
 }
