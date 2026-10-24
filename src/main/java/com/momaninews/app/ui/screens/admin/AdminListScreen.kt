@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+
 package com.momaninews.app.ui.screens.admin
 
 import androidx.compose.foundation.BorderStroke
