@@ -9,6 +9,7 @@ class MomaniNewsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         SettingsStore.init(this)
+        com.momaninews.app.data.settings.FollowStore.init(this)
         AuthRepositories.init(this)
         PushNotifier.createChannel(this)
         PushNotifier.schedule(this)

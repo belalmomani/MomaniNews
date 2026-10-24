@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.momaninews.app.data.model.NewsItem
@@ -156,6 +157,14 @@ private fun NewsDetailContent(news: NewsItem, onSignInClick: () -> Unit) {
             )
 
             SourceDateRow(source = news.source, dateLabel = news.dateLabel)
+
+            if (com.momaninews.app.data.settings.FollowLogic.key(news.source).isNotEmpty()) {
+                val followed by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
+                val isFollowing = com.momaninews.app.data.settings.FollowLogic.key(news.source) in followed
+                androidx.compose.material3.OutlinedButton(onClick = { com.momaninews.app.data.settings.FollowStore.toggle(news.source) }) {
+                    Text(if (isFollowing) "✓ تتابع هذا المصدر (إلغاء)" else "＋ تابع هذا المصدر لتظهر أخباره أولاً")
+                }
+            }
 
             news.videoUrl?.let { video ->
                 val context = androidx.compose.ui.platform.LocalContext.current

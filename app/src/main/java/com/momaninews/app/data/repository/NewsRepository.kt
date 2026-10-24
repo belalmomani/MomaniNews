@@ -28,3 +28,6 @@ interface NewsRepository {
 
 /** عدد بطاقات القصص في الرئيسية. */
 const val STORY_COUNT = 10
+
+/** عدد الأخبار المجلوبة قبل تقديم المصادر المتابَعة وقصّ القائمة إلى [STORY_COUNT]. */
+const val STORY_POOL = 30

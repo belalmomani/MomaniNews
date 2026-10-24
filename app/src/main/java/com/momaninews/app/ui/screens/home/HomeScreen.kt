@@ -225,8 +225,13 @@ fun HomeScreen(
                                 )
                             }
                             item(key = "featured") {
+                                val followed by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
+                                val stories = remember(state.featured, followed) {
+                                    com.momaninews.app.data.settings.FollowLogic.prioritize(state.featured, followed)
+                                        .take(com.momaninews.app.data.repository.STORY_COUNT)
+                                }
                                 com.momaninews.app.ui.components.FeaturedStrip(
-                                    items = state.featured,
+                                    items = stories,
                                     onNewsClick = onNewsClick,
                                     onCreateClick = { if (user == null) onSignInClick() else onComposeClick() }
                                 )
