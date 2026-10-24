@@ -219,4 +219,11 @@ class AdminLogicTest {
         assertEquals("region", d.kind); assertEquals("sakhra", d.regionId); assertTrue(d.needsContext)
         assertNull(AdminRules.parseKeywordInput("region مالطا"))   // لا يمكن استنتاج المنطقة
     }
+
+    @Test fun idList_buildsSafeInClause() {
+        assertEquals("(1,2,3)", AdminRules.idList(listOf("1", "2", "2", "3")))
+        for (bad in listOf(listOf("1", "2)&status=eq.approved"), listOf("x"), emptyList())) {
+            try { AdminRules.idList(bad); throw AssertionError("accepted $bad") } catch (e: IllegalArgumentException) { }
+        }
+    }
 }
