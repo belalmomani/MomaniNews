@@ -25,6 +25,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+        with:
+
+          gradle-version: 8.14.3
+
       - name: Check secrets exist
         env:
           K: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -36,7 +40,11 @@ jobs:
           K: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: echo "$K" | base64 --decode > "$RUNNER_TEMP/release.keystore"
 
-      - run: chmod +x ./gradlew
+      - run: |
+
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then gradle wrapper --gradle-version 8.14.3; fi
+
+          chmod +x ./gradlew
 
       - name: Unit tests and bundleRelease
         env:

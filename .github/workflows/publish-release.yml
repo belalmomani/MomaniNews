@@ -27,7 +27,11 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - uses: gradle/actions/setup-gradle@v4
-      - run: chmod +x ./gradlew
+        with:
+          gradle-version: 8.14.3
+      - run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then gradle wrapper --gradle-version 8.14.3; fi
+          chmod +x ./gradlew
       - name: Compute version
         run: |
           CODE=$((100 + GITHUB_RUN_NUMBER))
