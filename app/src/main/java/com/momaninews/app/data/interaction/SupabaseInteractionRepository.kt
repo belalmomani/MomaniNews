@@ -71,6 +71,15 @@ class SupabaseInteractionRepository(
         com.momaninews.app.data.model.ReactionSummary(SupabaseInteractionParser.parseReactionCounts(counts.body), mine)
     }
 
+    override suspend fun getReactionCounts(newsIds: List<Int>): Map<Int, Map<com.momaninews.app.data.model.Reaction, Int>> = withContext(Dispatchers.IO) {
+        val ids = newsIds.distinct().take(60)
+        if (ids.isEmpty()) return@withContext emptyMap()
+        runCatching {
+            val r = rest.call("GET", "news_reaction_counts?select=news_id,reaction,n&news_id=in.(${ids.joinToString(",")})")
+            if (r.code !in 200..299) emptyMap() else SupabaseInteractionParser.parseBulkReactionCounts(r.body)
+        }.getOrDefault(emptyMap())
+    }
+
     override suspend fun react(newsId: Int, reaction: com.momaninews.app.data.model.Reaction?): com.momaninews.app.data.model.ReactionSummary {
         val token = tokenProvider() ?: throw NotSignedInException()
         withContext(Dispatchers.IO) {

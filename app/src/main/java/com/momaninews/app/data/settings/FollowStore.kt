@@ -24,6 +24,15 @@ object FollowLogic {
     fun onlyFollowed(items: List<NewsItem>, followed: Set<String>): List<NewsItem> =
         items.filter { key(it.source) in followed }
 
+    /**
+     * عدد أخبار المصادر المتابَعة الأحدث مما شوهد (المعرّفات تتصاعد مع الإضافة).
+     * lastSeenId <= 0 = لم تُحدَّد نقطة البداية بعد، فلا شارة (حتى لا يُعدّ كل القديم جديداً).
+     */
+    fun newCount(items: List<NewsItem>, followed: Set<String>, lastSeenId: Int): Int =
+        if (lastSeenId <= 0 || followed.isEmpty()) 0 else items.count { it.id > lastSeenId && key(it.source) in followed }
+
+    fun maxId(items: List<NewsItem>): Int = items.maxOfOrNull { it.id } ?: 0
+
     fun toggle(followed: Set<String>, source: String): Set<String> {
         val k = key(source)
         if (k.isEmpty()) return followed
@@ -38,6 +47,18 @@ object FollowStore {
     private val state = MutableStateFlow<Set<String>>(emptySet())
     val followed: StateFlow<Set<String>> = state.asStateFlow()
 
+    private const val SEEN_KEY = "seen_id"
+    private val seen = MutableStateFlow(0)
+    /** آخر معرّف خبر اعتُبر «مشاهَداً» لقسم المتابَعة (0 = غير محدد بعد). */
+    val lastSeenId: StateFlow<Int> = seen.asStateFlow()
+
+    /** يرفع نقطة المشاهدة إلى [id] إن كان أكبر (لا يخفضها أبداً). */
+    fun markSeen(id: Int) {
+        if (id <= seen.value) return
+        seen.value = id
+        appContext?.getSharedPreferences(FILE, Context.MODE_PRIVATE)?.edit()?.putInt(SEEN_KEY, id)?.apply()
+    }
+
     @Volatile
     private var appContext: Context? = null
 
@@ -47,6 +68,7 @@ object FollowStore {
         appContext = app
         state.value = app.getSharedPreferences(FILE, Context.MODE_PRIVATE).getStringSet(KEY, null)
             ?.map { FollowLogic.key(it) }?.filter { it.isNotEmpty() }?.take(FollowLogic.MAX_FOLLOWED)?.toSet() ?: emptySet()
+        seen.value = app.getSharedPreferences(FILE, Context.MODE_PRIVATE).getInt(SEEN_KEY, 0)
     }
 
     /** يتابع المصدر إن لم يكن متابَعاً (لا يلغي المتابعة). */

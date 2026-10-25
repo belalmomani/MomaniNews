@@ -36,6 +36,21 @@ object SupabaseInteractionParser {
         return out
     }
 
+    /** news_reaction_counts لعدة أخبار دفعة واحدة → خريطة (معرّف الخبر → تفاعلاته). الصفوف المعطوبة تُتجاهل. */
+    fun parseBulkReactionCounts(json: String): Map<Int, Map<com.momaninews.app.data.model.Reaction, Int>> {
+        val array = JSONArray(json)
+        val out = LinkedHashMap<Int, LinkedHashMap<com.momaninews.app.data.model.Reaction, Int>>()
+        for (i in 0 until array.length()) {
+            val row = array.optJSONObject(i) ?: continue
+            if (!row.has("news_id")) continue
+            val id = row.optInt("news_id", -1)
+            val r = com.momaninews.app.data.model.Reaction.fromWire(row.optString("reaction", "")) ?: continue
+            val n = row.optInt("n", 0)
+            if (id >= 0 && n > 0) out.getOrPut(id) { LinkedHashMap() }[r] = n
+        }
+        return out
+    }
+
     fun parseMyReaction(json: String): com.momaninews.app.data.model.Reaction? {
         val array = JSONArray(json)
         if (array.length() == 0) return null

@@ -87,6 +87,14 @@ fun HomeScreen(
     val hiddenIds by com.momaninews.app.data.settings.PostPrefs.hidden.collectAsStateWithLifecycle()
     val followedSet by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
     var followedOnly by remember { mutableStateOf(false) }
+    val lastSeenId by com.momaninews.app.data.settings.FollowStore.lastSeenId.collectAsStateWithLifecycle()
+    val newFollowed = com.momaninews.app.data.settings.FollowLogic.newCount(state.allNews, followedSet, lastSeenId)
+    // أول مرة: نقطة البداية = أحدث خبر محمَّل الآن. وأثناء عرض «المتابَعة» تُحدَّث لتختفي الشارة.
+    androidx.compose.runtime.LaunchedEffect(state.allNews.size, followedOnly, lastSeenId) {
+        if (state.allNews.isNotEmpty() && (lastSeenId <= 0 || followedOnly)) {
+            com.momaninews.app.data.settings.FollowStore.markSeen(com.momaninews.app.data.settings.FollowLogic.maxId(state.allNews))
+        }
+    }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     val notHidden = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
     val byFollow = if (followedOnly) com.momaninews.app.data.settings.FollowLogic.onlyFollowed(notHidden, followedSet) else notHidden
@@ -97,6 +105,17 @@ fun HomeScreen(
         if ((followedOnly || categoryFilter != null) && (!followedOnly || followedSet.isNotEmpty()) && visibleNews.size < 10 && state.canLoadMore &&
             !state.isLoadingMore && !state.loadMoreFailed && !state.isLoading && state.allNews.size < 300
         ) viewModel.loadMore()
+    }
+    // عدّادات التفاعل على البطاقات: تُجلب مرة لكل خبر (دفعات ≤ 50)، والفشل صامت.
+    val reactionMap = remember { androidx.compose.runtime.mutableStateMapOf<Int, Map<com.momaninews.app.data.model.Reaction, Int>>() }
+    val reactionAsked = remember { HashSet<Int>() }
+    androidx.compose.runtime.LaunchedEffect(visibleNews.map { it.id }) {
+        val todo = visibleNews.map { it.id }.filter { it !in reactionAsked }.take(50)
+        if (todo.isNotEmpty()) {
+            reactionAsked.addAll(todo)
+            val got = com.momaninews.app.data.interaction.InteractionRepositories.default.getReactionCounts(todo)
+            reactionMap.putAll(got)
+        }
     }
     val errorMessage = state.errorMessage
 
@@ -193,7 +212,11 @@ fun HomeScreen(
                     FilterChip(
                         selected = followedOnly,
                         onClick = { followedOnly = !followedOnly },
-                        label = { Text("★ متابَعة") }
+                        label = {
+                            androidx.compose.material3.BadgedBox(badge = {
+                                if (newFollowed > 0 && !followedOnly) androidx.compose.material3.Badge { Text(if (newFollowed > 99) "99+" else newFollowed.toString()) }
+                            }) { Text("★ متابَعة") }
+                        }
                     )
                 }
                 items(com.momaninews.app.data.repository.NewsSort.entries.toList()) { option ->
@@ -297,7 +320,8 @@ fun HomeScreen(
                             items(visibleNews, key = { it.id }) { news ->
                                 NewsCard(
                                     news = news,
-                                    onClick = { onNewsClick(news.id) }
+                                    onClick = { onNewsClick(news.id) },
+                                    reactions = reactionMap[news.id]
                                 )
                             }
                             if (state.canLoadMore) {

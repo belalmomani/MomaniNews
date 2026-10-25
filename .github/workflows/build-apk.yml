@@ -38,12 +38,20 @@ jobs:
 
           chmod +x ./gradlew
 
+      # رقم الإصدار يُحسب من الوقت (دقائق منذ 1/1/2026 UTC)، فيتصاعد دائماً ويتوافق بين هذا البناء وبناء «Publish APK release».
+      # (كان هذا البناء يترك versionCode=1 فيظن التطبيق أن أي إصدار منشور أحدث منه حتى لو كان أقدم كوداً.)
+      - name: Compute version
+        run: |
+          CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          echo "CODE=$CODE" >> "$GITHUB_ENV"
+          echo "NAME=0.3.$CODE" >> "$GITHUB_ENV"
+
       - name: Run unit tests and build debug APK
-        run: ./gradlew testDebugUnitTest assembleDebug "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
+        run: ./gradlew testDebugUnitTest assembleDebug "-PversionCode=$CODE" "-PversionName=$NAME" "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: MomaniNews-debug-apk
+          name: MomaniNews-debug-apk-${{ env.NAME }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

@@ -41,3 +41,13 @@ data class ReactionSummary(val counts: Map<Reaction, Int>, val mine: Reaction?) 
 
     companion object { val EMPTY = ReactionSummary(emptyMap(), null) }
 }
+
+/** سطر التفاعلات الموجز لبطاقة الرئيسية: أكثر 3 رموز ثم المجموع («👍❤️😮 12»). null إن لم توجد تفاعلات. */
+object ReactionLine {
+    fun of(counts: Map<Reaction, Int>?): String? {
+        if (counts.isNullOrEmpty()) return null
+        val s = ReactionSummary(counts, null)
+        if (s.total <= 0) return null
+        return s.top(3).joinToString("") { it.emoji } + " " + s.total
+    }
+}

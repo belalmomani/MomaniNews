@@ -2,7 +2,7 @@ name: Publish APK release (for in-app updates)
 
 # يدوي فقط. يبني نسخة APK ويرفعها كإصدار على GitHub مع ملف البصمة SHA-256،
 # ثم يجدها زر «البحث عن تحديثات» في إعدادات التطبيق. المستودع يجب أن يكون عاماً (Public).
-# versionCode = 100 + رقم التشغيل (أكبر من 1 المثبّت حالياً، ويزيد دائماً).
+# versionCode = دقائق منذ 1/1/2026 UTC (يزيد دائماً ويتفق مع build-apk.yml).
 on:
   workflow_dispatch:
     inputs:
@@ -34,9 +34,10 @@ jobs:
           chmod +x ./gradlew
       - name: Compute version
         run: |
-          CODE=$((100 + GITHUB_RUN_NUMBER))
+          # نفس صيغة build-apk.yml (دقائق منذ 1/1/2026 UTC) كي يتفق ترتيب النسختين دائماً
+          CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
           echo "CODE=$CODE" >> "$GITHUB_ENV"
-          echo "NAME=0.2.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "NAME=0.3.$CODE" >> "$GITHUB_ENV"
       - name: Build
         run: ./gradlew testDebugUnitTest assembleDebug "-PversionCode=$CODE" "-PversionName=$NAME" "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
       - name: Prepare files

@@ -45,4 +45,21 @@ class FollowLogicTest {
         assertEquals(listOf(4, 2), FollowLogic.onlyFollowed(items, setOf("saraya", "petra")).map { it.id })
         assertTrue(FollowLogic.onlyFollowed(items, emptySet()).isEmpty())
     }
+
+    @Test fun newCount_countsOnlyFollowedNewerThanSeen() {
+        val items = listOf(n(12, "Saraya"), n(11, "عمون"), n(10, "saraya"), n(9, "Saraya"))
+        assertEquals(2, FollowLogic.newCount(items, setOf("saraya"), 9))
+        assertEquals(0, FollowLogic.newCount(items, setOf("saraya"), 12))
+    }
+
+    @Test fun newCount_noBaselineOrNoFollows_isZero() {
+        val items = listOf(n(5, "saraya"))
+        assertEquals(0, FollowLogic.newCount(items, setOf("saraya"), 0))
+        assertEquals(0, FollowLogic.newCount(items, emptySet(), 3))
+    }
+
+    @Test fun maxId_ofItems() {
+        assertEquals(0, FollowLogic.maxId(emptyList()))
+        assertEquals(7, FollowLogic.maxId(listOf(n(3, "a"), n(7, "b"))))
+    }
 }

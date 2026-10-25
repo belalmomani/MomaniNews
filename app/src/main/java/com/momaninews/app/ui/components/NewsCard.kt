@@ -46,7 +46,8 @@ internal fun shareBody(news: NewsItem, privacyUrl: String): String {
 fun NewsCard(
     news: NewsItem,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    reactions: Map<com.momaninews.app.data.model.Reaction, Int>? = null
 ) {
     val ctx = LocalContext.current
     Surface(
@@ -116,6 +117,14 @@ fun NewsCard(
             // الصورة بعرض كامل (تفتح الخبر)
             Box(modifier = Modifier.padding(top = 8.dp).clickable(onClick = onClick)) { NewsImage(news) }
 
+            com.momaninews.app.data.model.ReactionLine.of(reactions)?.let { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
 
             // شريط الإجراءات

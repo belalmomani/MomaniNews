@@ -39,6 +39,9 @@ interface InteractionRepository {
     suspend fun getReactions(newsId: Int): com.momaninews.app.data.model.ReactionSummary =
         com.momaninews.app.data.model.ReactionSummary.EMPTY
 
+    /** عدّادات التفاعل لعدة أخبار دفعة واحدة (لبطاقات الرئيسية). الفشل = خريطة فارغة؛ لا يُسقط الشاشة. */
+    suspend fun getReactionCounts(newsIds: List<Int>): Map<Int, Map<com.momaninews.app.data.model.Reaction, Int>> = emptyMap()
+
     /** يضبط تفاعل المستخدم على الخبر؛ null يزيله. يُرجع الملخص بعد التغيير. */
     suspend fun react(newsId: Int, reaction: com.momaninews.app.data.model.Reaction?): com.momaninews.app.data.model.ReactionSummary =
         throw UnsupportedOperationException()
