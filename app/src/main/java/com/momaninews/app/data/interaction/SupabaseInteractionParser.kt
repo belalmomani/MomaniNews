@@ -23,6 +23,25 @@ object SupabaseInteractionParser {
         return voteFromWire(array.getJSONObject(0).getString("vote"))
     }
 
+    /** news_reaction_counts → خريطة. الأنواع المجهولة تُتجاهل بدل أن تُسقط الشاشة. */
+    fun parseReactionCounts(json: String): Map<com.momaninews.app.data.model.Reaction, Int> {
+        val array = JSONArray(json)
+        val out = LinkedHashMap<com.momaninews.app.data.model.Reaction, Int>()
+        for (i in 0 until array.length()) {
+            val row = array.getJSONObject(i)
+            val r = com.momaninews.app.data.model.Reaction.fromWire(row.optString("reaction", "")) ?: continue
+            val n = row.optInt("n", 0)
+            if (n > 0) out[r] = n
+        }
+        return out
+    }
+
+    fun parseMyReaction(json: String): com.momaninews.app.data.model.Reaction? {
+        val array = JSONArray(json)
+        if (array.length() == 0) return null
+        return com.momaninews.app.data.model.Reaction.fromWire(array.getJSONObject(0).optString("reaction", ""))
+    }
+
     fun parseComments(json: String): List<Comment> {
         val array = JSONArray(json)
         return List(array.length()) { i ->

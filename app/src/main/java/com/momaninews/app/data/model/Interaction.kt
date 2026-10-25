@@ -16,3 +16,28 @@ data class Comment(
     val dateLabel: String,
     val isSample: Boolean = false
 )
+
+/** التفاعلات السبعة. رموز يونيكود قياسية (لا رسوم مملوكة لجهة)، و[wire] هو القيمة المخزّنة في القاعدة. */
+enum class Reaction(val wire: String, val emoji: String, val label: String) {
+    LIKE("like", "👍", "إعجاب"),
+    LOVE("love", "❤️", "أحببته"),
+    CARE("care", "🤗", "اهتمام"),
+    HAHA("haha", "😆", "أضحكني"),
+    WOW("wow", "😮", "أدهشني"),
+    SAD("sad", "😢", "أحزنني"),
+    ANGRY("angry", "😡", "أغضبني");
+
+    companion object {
+        fun fromWire(value: String?): Reaction? = entries.firstOrNull { it.wire == value }
+    }
+}
+
+data class ReactionSummary(val counts: Map<Reaction, Int>, val mine: Reaction?) {
+    val total: Int get() = counts.values.sum()
+
+    /** أكثر التفاعلات حضوراً (بترتيب العدد ثم ترتيب التعريف)، حتى [limit]. */
+    fun top(limit: Int = 3): List<Reaction> =
+        counts.filterValues { it > 0 }.entries.sortedWith(compareByDescending<Map.Entry<Reaction, Int>> { it.value }.thenBy { it.key.ordinal }).take(limit).map { it.key }
+
+    companion object { val EMPTY = ReactionSummary(emptyMap(), null) }
+}

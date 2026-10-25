@@ -145,6 +145,27 @@ begin
   perform t.chk('votes: العدّاد العام', t.sel(null, anon, format('select credible||''/''||not_credible from public.news_vote_counts where news_id=%s', n_ok)), '1/1');
   perform t.chk('votes: العدّاد لا يشمل غير المعتمد', t.sel(null, anon, format('select count(*) from public.news_vote_counts where news_id=%s', n_pend)), '0');
 
+  -- ---------- التفاعلات (reactions) ----------
+  perform t.chk('reactions: الزائر لا يتفاعل', t.dml(null, anon, format('insert into public.news_reactions (news_id,reaction) values (%s,''like'')', n_ok)), 'ERR:42501');
+  perform t.chk('reactions: مستخدم يتفاعل', t.dml(ua, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''like'')', n_ok)), '1');
+  perform t.chk('reactions: تفاعل ثانٍ مرفوض (واحد لكل خبر)', t.dml(ua, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''love'')', n_ok)), 'ERR:23505');
+  perform t.chk('reactions: نوع غير معروف مرفوض', t.dml(ub, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''xyz'')', n_ok)), 'ERR:23514');
+  perform t.chk('reactions: انتحال user_id مرفوض', t.dml(ub, au, format('insert into public.news_reactions (news_id,user_id,reaction) values (%s,%L,''love'')', n_ok, ua)), 'ERR:42501');
+  perform t.chk('reactions: خبر غير معتمد مرفوض', t.dml(ub, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''love'')', n_pend)), 'ERR:42501');
+  perform t.chk('reactions: المحظور مرفوض', t.dml(ud, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''love'')', n_ok)), 'ERR:42501');
+  perform t.chk('reactions: ب يتفاعل', t.dml(ub, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''love'')', n_ok)), '1');
+  perform t.chk('reactions: تغيير تفاعله', t.dml(ua, au, format('update public.news_reactions set reaction=''wow'' where news_id=%s', n_ok)), '1');
+  perform t.chk('reactions: لا يغيّر تفاعل غيره', t.dml(ub, au, format('update public.news_reactions set reaction=''sad'' where user_id=%L', ua)), '0');
+  perform t.chk('reactions: لا يغيّر news_id', t.dml(ua, au, format('update public.news_reactions set news_id=%s where user_id=%L', n_pend, ua)), 'ERR:42501');
+  perform t.chk('reactions: لا يرى تفاعلات غيره', t.sel(ub, au, 'select count(*) from public.news_reactions'), '1');
+  perform t.chk('reactions: الزائر لا يقرأ الجدول', t.sel(null, anon, 'select count(*) from public.news_reactions'), 'ERR:42501');
+  perform t.chk('reactions: العدّاد العام', t.sel(null, anon, format('select string_agg(reaction||'':''||n, '','' order by reaction) from public.news_reaction_counts where news_id=%s', n_ok)), 'love:1,wow:1');
+  perform t.chk('reactions: العدّاد لا يشمل غير المعتمد', t.sel(null, anon, format('select count(*) from public.news_reaction_counts where news_id=%s', n_pend)), '0');
+  perform t.chk('reactions: لا يحذف تفاعل غيره', t.dml(ub, au, format('delete from public.news_reactions where user_id=%L', ua)), '0');
+  perform t.chk('reactions: يحذف تفاعله', t.dml(ua, au, format('delete from public.news_reactions where news_id=%s', n_ok)), '1');
+  perform t.chk('reactions: الزائر لا يحذف', t.dml(null, anon, 'delete from public.news_reactions'), 'ERR:42501');
+  perform t.dml(ua, au, format('insert into public.news_reactions (news_id,reaction) values (%s,''like'')', n_ok));
+
   -- ---------- التعليقات ----------
   perform t.chk('comments: الزائر لا يعلّق', t.dml(null, anon, format('insert into public.comments (news_id,body) values (%s,''x'')', n_ok)), 'ERR:42501');
   perform t.chk('comments: مستخدم يعلّق', t.dml(ua, au, format('insert into public.comments (news_id,body) values (%s,''  تعليق أول  '')', n_ok)), '1');
@@ -322,6 +343,7 @@ begin
   delete from auth.users where id = ua;
   perform t.chk('cascade: users', t.sel(null, su, format('select count(*) from public.users where id=%L', ua)), '0');
   perform t.chk('cascade: votes', t.sel(null, su, format('select count(*) from public.news_votes where user_id=%L', ua)), '0');
+  perform t.chk('cascade: reactions', t.sel(null, su, format('select count(*) from public.news_reactions where user_id=%L', ua)), '0');
   perform t.chk('cascade: comments', t.sel(null, su, format('select count(*) from public.comments where user_id=%L', ua)), '0');
   perform t.chk('cascade: verification', t.sel(null, su, format('select count(*) from public.verification_requests where user_id=%L', ua)), '0');
   perform t.chk('cascade: الإعلانات تبقى بلا مالك', t.sel(null, su, 'select count(*) from public.advertisements where user_id is null and title like ''إعلان%'''), '5');

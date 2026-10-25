@@ -59,6 +59,47 @@ class SupabaseInteractionRepository(
         return getVotes(newsId)
     }
 
+    override suspend fun getReactions(newsId: Int): com.momaninews.app.data.model.ReactionSummary = withContext(Dispatchers.IO) {
+        val counts = rest.call("GET", "news_reaction_counts?select=reaction,n&news_id=eq.$newsId")
+        requireOk(counts)
+        val token = tokenProvider()
+        val mine = if (token == null) null else {
+            val r = rest.call("GET", "news_reactions?select=reaction&news_id=eq.$newsId&limit=1", bearer = token)
+            requireOk(r)
+            SupabaseInteractionParser.parseMyReaction(r.body)
+        }
+        com.momaninews.app.data.model.ReactionSummary(SupabaseInteractionParser.parseReactionCounts(counts.body), mine)
+    }
+
+    override suspend fun react(newsId: Int, reaction: com.momaninews.app.data.model.Reaction?): com.momaninews.app.data.model.ReactionSummary {
+        val token = tokenProvider() ?: throw NotSignedInException()
+        withContext(Dispatchers.IO) {
+            if (reaction == null) {
+                // RLS يحصر الحذف في صفوف المستخدم نفسه
+                requireOk(rest.call("DELETE", "news_reactions?news_id=eq.$newsId", bearer = token, prefer = "return=minimal"))
+            } else {
+                val patch = rest.call(
+                    "PATCH", "news_reactions?news_id=eq.$newsId",
+                    JSONObject().put("reaction", reaction.wire).toString(),
+                    bearer = token, prefer = "return=representation"
+                )
+                requireOk(patch)
+                if (JSONArray(patch.body).length() == 0) {
+                    val insert = rest.call(
+                        "POST", "news_reactions",
+                        JSONObject().put("news_id", newsId).put("reaction", reaction.wire).toString(),
+                        bearer = token, prefer = "return=minimal"
+                    )
+                    if (insert.code == 409) {
+                        // سباق نادر: أُنشئ الصف بين الطلبين، فنعدّله
+                        requireOk(rest.call("PATCH", "news_reactions?news_id=eq.$newsId", JSONObject().put("reaction", reaction.wire).toString(), bearer = token, prefer = "return=minimal"))
+                    } else requireOk(insert)
+                }
+            }
+        }
+        return getReactions(newsId)
+    }
+
     override suspend fun getComments(newsId: Int): List<Comment> = withContext(Dispatchers.IO) {
         val r = rest.call(
             "GET",

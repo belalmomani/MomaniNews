@@ -36,6 +36,13 @@ interface InteractionRepository {
     suspend fun getComments(newsId: Int): List<Comment>
     suspend fun addComment(newsId: Int, text: String): Comment
 
+    suspend fun getReactions(newsId: Int): com.momaninews.app.data.model.ReactionSummary =
+        com.momaninews.app.data.model.ReactionSummary.EMPTY
+
+    /** يضبط تفاعل المستخدم على الخبر؛ null يزيله. يُرجع الملخص بعد التغيير. */
+    suspend fun react(newsId: Int, reaction: com.momaninews.app.data.model.Reaction?): com.momaninews.app.data.model.ReactionSummary =
+        throw UnsupportedOperationException()
+
     /** إبلاغ عن تعليق مسيء. التنفيذ التجريبي لا يفعل شيئاً. */
     suspend fun reportComment(commentId: Int, reason: String? = null) {}
 }
@@ -59,6 +66,27 @@ class DemoInteractionRepository(private val auth: AuthRepository) : InteractionR
             votes[newsId to user.id] = vote
             summary(newsId)
         }
+    }
+
+    private val reactions = mutableMapOf<Pair<Int, String>, com.momaninews.app.data.model.Reaction>()
+
+    override suspend fun getReactions(newsId: Int): com.momaninews.app.data.model.ReactionSummary = synchronized(lock) { reactionSummary(newsId) }
+
+    override suspend fun react(newsId: Int, reaction: com.momaninews.app.data.model.Reaction?): com.momaninews.app.data.model.ReactionSummary {
+        val user = auth.currentUser.value ?: throw NotSignedInException()
+        return synchronized(lock) {
+            if (reaction == null) reactions.remove(newsId to user.id) else reactions[newsId to user.id] = reaction
+            reactionSummary(newsId)
+        }
+    }
+
+    private fun reactionSummary(newsId: Int): com.momaninews.app.data.model.ReactionSummary {
+        val forNews = reactions.filterKeys { it.first == newsId }
+        val me = auth.currentUser.value?.id
+        return com.momaninews.app.data.model.ReactionSummary(
+            counts = forNews.values.groupingBy { it }.eachCount(),
+            mine = if (me == null) null else forNews[newsId to me]
+        )
     }
 
     override suspend fun getComments(newsId: Int): List<Comment> = synchronized(lock) {

@@ -48,6 +48,7 @@ fun InteractionSection(
 ) {
     val user by auth.currentUser.collectAsStateWithLifecycle()
     var votes by remember(newsId) { mutableStateOf(VoteSummary(0, 0, null)) }
+    var reactions by remember(newsId) { mutableStateOf(com.momaninews.app.data.model.ReactionSummary.EMPTY) }
     var comments by remember(newsId) { mutableStateOf<List<Comment>>(emptyList()) }
     var draft by remember(newsId) { mutableStateOf("") }
     var message by remember(newsId) { mutableStateOf<String?>(null) }
@@ -56,6 +57,8 @@ fun InteractionSection(
     LaunchedEffect(newsId, user?.id) {
         try {
             votes = interaction.getVotes(newsId)
+            // التفاعلات اختيارية: فشلها (مثلاً قبل تطبيق ترحيل SQL) لا يمنع عرض الباقي
+            reactions = try { interaction.getReactions(newsId) } catch (e: CancellationException) { throw e } catch (e: Exception) { reactions }
             comments = interaction.getComments(newsId)
         } catch (e: CancellationException) {
             throw e
@@ -77,6 +80,23 @@ fun InteractionSection(
                 throw e
             } catch (e: Exception) {
                 message = "تعذر تسجيل التصويت."
+            }
+        }
+    }
+
+    fun onReact(r: com.momaninews.app.data.model.Reaction?) {
+        if (!InteractionRules.canVote(user)) {
+            onSignInClick()
+            return
+        }
+        scope.launch {
+            try {
+                reactions = interaction.react(newsId, r)
+                message = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message = "تعذر تسجيل التفاعل."
             }
         }
     }
@@ -118,6 +138,8 @@ fun InteractionSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        ReactionBar(summary = reactions, onReact = ::onReact)
+
         Text(
             text = "هل الخبر موثوق؟",
             style = MaterialTheme.typography.titleMedium,
