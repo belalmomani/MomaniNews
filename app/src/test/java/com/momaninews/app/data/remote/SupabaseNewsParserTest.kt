@@ -60,4 +60,27 @@ class SupabaseNewsParserTest {
             SupabaseNewsParser.parseList("""{"code":"42501","message":"denied"}""")
         }
     }
+
+    @Test
+    fun category_knownKeptUnknownOrMissingNull() {
+        val j = """
+            [{"id":1,"title":"أ","content":"ن","regions":{"id":"abeen","name_ar":"عبين"},"category":"death"},
+             {"id":2,"title":"ب","content":"ن","regions":{"id":"abeen","name_ar":"عبين"},"category":"zzz"},
+             {"id":3,"title":"ج","content":"ن","regions":{"id":"abeen","name_ar":"عبين"},"category":null},
+             {"id":4,"title":"د","content":"ن","regions":{"id":"abeen","name_ar":"عبين"}}]
+        """.trimIndent()
+        val c = SupabaseNewsParser.parseList(j).map { it.category }
+        assertEquals(listOf("death", null, null, null), c)
+    }
+
+    @Test
+    fun categoryFilter_keepsOnlyMatchingAndAllWhenNull() {
+        val items = SupabaseNewsParser.parseList("""
+            [{"id":1,"title":"أ","content":"ن","regions":{"id":"abeen","name_ar":"عبين"},"category":"death"},
+             {"id":2,"title":"ب","content":"ن","regions":{"id":"abeen","name_ar":"عبين"},"category":"sports"}]
+        """.trimIndent())
+        assertEquals(listOf(1), com.momaninews.app.data.model.NewsCategories.filter(items, "death").map { it.id })
+        assertEquals(2, com.momaninews.app.data.model.NewsCategories.filter(items, null).size)
+        assertEquals(7, com.momaninews.app.data.model.NewsCategories.all.size)
+    }
 }

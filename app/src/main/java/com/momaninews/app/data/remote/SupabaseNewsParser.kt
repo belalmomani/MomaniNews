@@ -42,7 +42,8 @@ object SupabaseNewsParser {
             isSample = false,
             imageUrl = httpsOrNull(text(obj, "image_url")),
             videoUrl = httpsOrNull(text(obj, "video_url")),
-            sourceUrl = httpsOrNull(text(obj, "original_url"))
+            sourceUrl = httpsOrNull(text(obj, "original_url")),
+            category = com.momaninews.app.data.model.NewsCategories.of(text(obj, "category").ifEmpty { null })?.wire
         )
     }
 

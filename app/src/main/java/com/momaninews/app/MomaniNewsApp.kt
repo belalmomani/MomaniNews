@@ -14,5 +14,6 @@ class MomaniNewsApp : Application() {
         AuthRepositories.init(this)
         PushNotifier.createChannel(this)
         PushNotifier.schedule(this)
+        com.momaninews.app.data.notifications.FollowedNewsScheduler.schedule(this)
     }
 }

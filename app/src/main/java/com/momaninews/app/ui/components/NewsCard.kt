@@ -77,7 +77,9 @@ fun NewsCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = news.dateLabel + " • " + news.region.nameAr + (if (news.videoUrl != null) " • ▶ فيديو" else ""),
+                        text = news.dateLabel + " • " + news.region.nameAr +
+                            (com.momaninews.app.data.model.NewsCategories.of(news.category)?.let { " • ${it.emoji} ${it.label}" } ?: "") +
+                            (if (news.videoUrl != null) " • ▶ فيديو" else ""),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

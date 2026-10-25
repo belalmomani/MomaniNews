@@ -24,13 +24,17 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
 
     private val base: String = url.trimEnd('/') + "/rest/v1/"
 
+    /** عمود category من الترحيل 20261025100000؛ إن لم يُطبَّق بعد يفشل الطلب بـ400 فنعيده بدونه ونتذكر ذلك. */
+    @Volatile private var categoryOk = true
+    private fun cols(): String = if (categoryOk) SupabaseNewsParser.SELECT + ",category" else SupabaseNewsParser.SELECT
+
     init {
         require(base.startsWith("https://")) { "Supabase URL must use https" }
         require(publicKey.isNotBlank()) { "Supabase key is empty" }
     }
 
     override suspend fun getNews(): List<NewsItem> = withContext(Dispatchers.IO) {
-        val body = get("news?select=${SupabaseNewsParser.SELECT}&order=published_at.desc&limit=$PAGE_SIZE")
+        val body = get("news?select=${cols()}&order=published_at.desc&limit=$PAGE_SIZE")
         SupabaseNewsParser.parseList(body)
     }
 
@@ -41,7 +45,7 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
     override suspend fun getNews(offset: Int, sort: NewsSort): List<NewsItem> = withContext(Dispatchers.IO) {
         val off = offset.coerceAtLeast(0)
         val filter = sort.filter?.let { "&$it" } ?: ""
-        val body = get("news?select=${SupabaseNewsParser.SELECT}$filter&order=${sort.order}&limit=$PAGE_SIZE&offset=$off")
+        val body = get("news?select=${cols()}$filter&order=${sort.order}&limit=$PAGE_SIZE&offset=$off")
         SupabaseNewsParser.parseList(body)
     }
 
@@ -59,15 +63,24 @@ class SupabaseNewsRepository(url: String, private val publicKey: String) : NewsR
     /** القصص: أحدث [limit] أخبار معتمدة (سياسة RLS تعيد المعتمد فقط)، سواء أضافها المدير أو مستخدم، بصورة أو بدونها. */
     override suspend fun getStories(limit: Int): List<NewsItem> = withContext(Dispatchers.IO) {
         val n = limit.coerceIn(1, 30)
-        SupabaseNewsParser.parseList(get("news?select=${SupabaseNewsParser.SELECT}&order=published_at.desc&limit=$n"))
+        SupabaseNewsParser.parseList(get("news?select=${cols()}&order=published_at.desc&limit=$n"))
     }
 
     override suspend fun getNewsById(id: Int): NewsItem? = withContext(Dispatchers.IO) {
-        val body = get("news?select=${SupabaseNewsParser.SELECT}&id=eq.$id&limit=1")
+        val body = get("news?select=${cols()}&id=eq.$id&limit=1")
         SupabaseNewsParser.parseFirstOrNull(body)
     }
 
-    private fun get(path: String): String {
+    private fun get(path: String): String = try {
+        getRaw(path)
+    } catch (e: IOException) {
+        if (categoryOk && e.message == "HTTP 400" && path.contains(",category")) {
+            categoryOk = false
+            getRaw(path.replace(",category", ""))
+        } else throw e
+    }
+
+    private fun getRaw(path: String): String {
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"

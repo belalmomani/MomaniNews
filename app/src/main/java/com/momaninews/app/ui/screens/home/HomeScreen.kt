@@ -87,12 +87,14 @@ fun HomeScreen(
     val hiddenIds by com.momaninews.app.data.settings.PostPrefs.hidden.collectAsStateWithLifecycle()
     val followedSet by com.momaninews.app.data.settings.FollowStore.followed.collectAsStateWithLifecycle()
     var followedOnly by remember { mutableStateOf(false) }
+    var categoryFilter by remember { mutableStateOf<String?>(null) }
     val notHidden = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
-    val visibleNews = if (followedOnly) com.momaninews.app.data.settings.FollowLogic.onlyFollowed(notHidden, followedSet) else notHidden
+    val byFollow = if (followedOnly) com.momaninews.app.data.settings.FollowLogic.onlyFollowed(notHidden, followedSet) else notHidden
+    val visibleNews = com.momaninews.app.data.model.NewsCategories.filter(byFollow, categoryFilter)
 
     // في عرض «المتابَعة» نكمل جلب الصفحات تلقائياً (بحد أقصى) حتى تظهر أخبار كافية من المصادر المتابَعة
-    androidx.compose.runtime.LaunchedEffect(followedOnly, followedSet, state.allNews.size, state.canLoadMore, state.isLoadingMore, state.loadMoreFailed) {
-        if (followedOnly && followedSet.isNotEmpty() && visibleNews.size < 10 && state.canLoadMore &&
+    androidx.compose.runtime.LaunchedEffect(followedOnly, categoryFilter, followedSet, state.allNews.size, state.canLoadMore, state.isLoadingMore, state.loadMoreFailed) {
+        if ((followedOnly || categoryFilter != null) && (!followedOnly || followedSet.isNotEmpty()) && visibleNews.size < 10 && state.canLoadMore &&
             !state.isLoadingMore && !state.loadMoreFailed && !state.isLoading && state.allNews.size < 300
         ) viewModel.loadMore()
     }
@@ -203,6 +205,20 @@ fun HomeScreen(
                 }
             }
 
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(com.momaninews.app.data.model.NewsCategories.all) { c ->
+                    FilterChip(
+                        selected = categoryFilter == c.wire,
+                        onClick = { categoryFilter = if (categoryFilter == c.wire) null else c.wire },
+                        label = { Text("${c.emoji} ${c.label}") }
+                    )
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -222,7 +238,14 @@ fun HomeScreen(
                             displayName = user?.displayName,
                             onClick = { if (user == null) onSignInClick() else onComposeClick() }
                         )
-                        if (followedOnly) {
+                        if (categoryFilter != null && !followedOnly) {
+                            com.momaninews.app.ui.components.MessageState(
+                                title = "لا أخبار في هذا التصنيف حالياً",
+                                message = "التصنيف يُحدَّد تلقائياً للأخبار المجلوبة حديثاً فقط.",
+                                actionLabel = "عرض كل الأخبار",
+                                onAction = { categoryFilter = null }
+                            )
+                        } else if (followedOnly) {
                             com.momaninews.app.ui.components.MessageState(
                                 title = if (followedSet.isEmpty()) "لا تتابع أي مصدر بعد" else "لا أخبار من مصادرك المتابَعة حالياً",
                                 message = if (followedSet.isEmpty()) "اضغط ⋯ على أي خبر ثم «مهتم» لمتابعة مصدره." else "جرّب لاحقاً أو أزل التصفية.",

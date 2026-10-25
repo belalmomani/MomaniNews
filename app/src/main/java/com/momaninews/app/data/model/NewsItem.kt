@@ -30,5 +30,18 @@ data class NewsItem(
     /** رابط https لفيديو MP4 (اختياري). */
     val videoUrl: String? = null,
     /** الرابط الأصلي للخبر عند المصدر (للأخبار المجلوبة). https فقط. */
-    val sourceUrl: String? = null
+    val sourceUrl: String? = null,
+    /** تصنيف الجالب (death/congrats/...)؛ null = غير مصنّف. */
+    val category: String? = null
 )
+
+/** تصنيفات الأخبار (نفس قيم عمود news.category). الترتيب هو ترتيب أزرار التصفية. */
+object NewsCategories {
+    data class Cat(val wire: String, val emoji: String, val label: String)
+    val all: List<Cat> = listOf(
+        Cat("death", "⚫", "وفيات"), Cat("congrats", "🎉", "تهاني"), Cat("achievement", "🏆", "نجاح وتفوق"),
+        Cat("services", "🛠", "خدمات"), Cat("sports", "⚽", "رياضة"), Cat("weather", "🌧", "طقس"), Cat("incident", "🚨", "حوادث")
+    )
+    fun of(wire: String?): Cat? = all.firstOrNull { it.wire == wire }
+    fun filter(items: List<NewsItem>, wire: String?): List<NewsItem> = if (wire == null) items else items.filter { it.category == wire }
+}
