@@ -1,0 +1,26 @@
+name: Fetch watchdog
+
+# يفشل إن توقف الجلب (لا تشغيل منذ 8 ساعات، أو 3 تشغيلات سيئة متتالية)، فيصلك إشعار GitHub بفشل المهمة.
+on:
+  schedule:
+    - cron: "20 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check fetch health
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m momani_fetcher.watchdog

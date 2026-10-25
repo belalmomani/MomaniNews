@@ -159,12 +159,19 @@ class SupabaseStore:
         return [(r["id"], r["title"]) for r in rows]
 
     # ---- كتابة
+    category_supported = True   # يصير False إن لم يُطبَّق الترحيل 20261025100000 بعد (فلا نفقد الأخبار)
+
     def insert_news(self, row: dict) -> int | None:
+        if not self.category_supported:
+            row = {k: v for k, v in row.items() if k != "category"}
         try:
             res = self._call("POST", "news", row, prefer="return=representation")
         except StoreError as e:
             if e.code == 409:  # قيد التفرد (رابط/بصمة): الخبر موجود
                 return None
+            if e.code == 400 and "category" in row and "category" in str(e):
+                self.category_supported = False
+                return self.insert_news(row)
             raise
         return res[0]["id"] if res else None
 
@@ -202,6 +209,9 @@ class SupabaseStore:
 
     def save_link_check(self, row: dict) -> None:
         self._call("POST", "link_checks?on_conflict=news_id", row, prefer="resolution=merge-duplicates,return=minimal")
+
+    def recent_runs(self, limit: int = 8) -> list[dict]:
+        return self._call("GET", f"fetch_runs?select=id,started_at,finished_at,sources_total,sources_failed,items_seen,error_summary&order=started_at.desc&limit={int(limit)}") or []
 
     def log_failure(self, source_id: int | None, url: str | None, error: str) -> None:
         self._call("POST", "failed_fetch_logs", {"source_id": source_id, "url": (url or "")[:500], "error": error[:500]}, prefer="return=minimal")

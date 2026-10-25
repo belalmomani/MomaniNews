@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from datetime import datetime, timedelta, timezone
 
-from . import dedup, discover, feeds, matcher, pages as pagemod, queries, validate, wpapi
+from . import classify, dedup, discover, feeds, matcher, pages as pagemod, queries, validate, wpapi
 from .store import StoreError, SupabaseStore
 
 MAX_NEW_PER_SOURCE = 100
@@ -318,6 +318,7 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
             "matched_terms": m.terms,
             "source_published_at": it.published.isoformat() if it.published else None,
             "fetch_note": (m.note or None),
+            "category": classify.classify(it.title, excerpt),
         }
         new_id = store.insert_news(row)
         if new_id:

@@ -83,6 +83,12 @@ object AdminRules {
         return KeywordInput(kind, word, region, ctx)
     }
 
+    /** تسمية تصنيف الخبر (من الجالب)؛ فارغ لغير المصنّف أو لقيمة غير معروفة. */
+    fun categoryLabel(wire: String): String = when (wire) {
+        "death" -> "⚫ وفاة"; "congrats" -> "🎉 تهنئة"; "achievement" -> "🏆 نجاح وتفوق"; "services" -> "🛠 خدمات"
+        "sports" -> "⚽ رياضة"; "weather" -> "🌧 طقس"; "incident" -> "🚨 حوادث"; else -> ""
+    }
+
     /**
      * من نموذج الإضافة السهل إلى أسطر بالصيغة القديمة (سطر لكل كلمة). الكلمات مفصولة بسطر جديد أو فاصلة (، ,).
      * المنطقة تُلصق فقط لنوع region/alias إن اختيرت (وإلا تُستنتج من الكلمة). فارغ = لا كلمات.
@@ -165,7 +171,7 @@ object AdminParser {
             AdminItem(
                 ref = r.get("id").toString(),
                 title = str(r, "title"),
-                meta = listOf(region, str(r, "source_name"), if (userPost) "منشور مستخدم" else "", if (r.optBoolean("is_featured", false)) "★ مميّز" else "", date(r, "created_at"))
+                meta = listOf(region, str(r, "source_name"), if (userPost) "منشور مستخدم" else "", AdminRules.categoryLabel(str(r, "category")), if (r.optBoolean("is_featured", false)) "★ مميّز" else "", date(r, "created_at"))
                     .filter { it.isNotBlank() }.joinToString(" • "),
                 body = listOf(
                     str(r, "excerpt"),
@@ -362,7 +368,11 @@ class AdminRepository(
 
     // ---- الأخبار
     suspend fun pendingNews(): List<AdminItem> {
-        val items = AdminParser.news(get("news?select=id,title,excerpt,content,image_url,author_id,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)&status=eq.pending&order=created_at.asc&limit=100"))
+        val base = "id,title,excerpt,content,image_url,author_id,source_name,created_at,matched_terms,original_url,fetch_note,regions(name_ar)"
+        // category من الترحيل 20261025100000؛ إن لم يُطبَّق بعد نعرض الأخبار بدونه بدل أن يفشل التبويب
+        val body = runCatching { get("news?select=$base,category&status=eq.pending&order=created_at.asc&limit=100") }
+            .getOrElse { get("news?select=$base&status=eq.pending&order=created_at.asc&limit=100") }
+        val items = AdminParser.news(body)
         // التحذيرات (كلمات محظورة) في جدول للأدمن فقط؛ فشل جلبها لا يمنع عرض الأخبار
         val flags = runCatching { AdminParser.flags(get("news_flags?select=news_id,reason&limit=300")) }.getOrDefault(emptyMap())
         return AdminParser.markFlagged(items, flags)

@@ -236,4 +236,10 @@ class AdminLogicTest {
         // الناتج يُفهم بالمحلّل القديم
         assertEquals("قبة الصخرة", AdminRules.parseKeywordInput(AdminRules.composeKeywordLines("قبة الصخرة", "exclude", ""))!!.word)
     }
+
+    @Test fun categoryLabel_knownAndUnknown() {
+        assertEquals("⚫ وفاة", AdminRules.categoryLabel("death"))
+        assertEquals("", AdminRules.categoryLabel(""))
+        assertEquals("", AdminRules.categoryLabel("bogus"))
+    }
 }
