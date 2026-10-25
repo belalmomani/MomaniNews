@@ -206,7 +206,7 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
                             onCheck = { on -> selected = if (on) selected + item.ref else selected - item.ref }
                         ) { action ->
                             val p = PendingAction(item, action)
-                            if (action.confirm != null || action.prompt != null) {
+                            if (action.confirm != null || action.prompt != null || action.groups.isNotEmpty()) {
                                 input = action.promptDefault
                                 picks = action.groups.map { g -> g.options.first().second }
                                 pending = p
@@ -273,7 +273,7 @@ fun AdminListScreen(title: String, onBack: () -> Unit, tabs: List<AdminTab>) {
                 TextButton(onClick = {
                     pending = null
                     val composed = p.action.compose?.invoke(input, picks) ?: input
-                    execute(p, if (p.action.prompt != null) composed else null)
+                    execute(p, if (p.action.prompt != null || p.action.compose != null) composed else null)
                 }) { Text("موافق") }
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text("إلغاء") } }

@@ -219,6 +219,13 @@ class SupabaseStore:
                 return []
             raise
 
+    # ---- تصنيف الأخبار القديمة (يتطلب الترحيل 20261025100000)
+    def unclassified_news(self, limit: int = 500, after_id: int = 0) -> list[dict]:
+        return self._call("GET", f"news?select=id,title,excerpt&category=is.null&id=gt.{int(after_id)}&order=id.asc&limit={int(limit)}") or []
+
+    def set_category(self, news_id: int, category: str) -> None:
+        self._call("PATCH", f"news?id=eq.{int(news_id)}&category=is.null", {"category": category}, prefer="return=minimal")
+
     def recent_runs(self, limit: int = 8) -> list[dict]:
         return self._call("GET", f"fetch_runs?select=id,started_at,finished_at,sources_total,sources_failed,items_seen,error_summary&order=started_at.desc&limit={int(limit)}") or []
 

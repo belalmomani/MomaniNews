@@ -405,6 +405,11 @@ class AdminRepository(
             write("PATCH", "news?id=in.${AdminRules.idList(chunk)}&status=eq.pending", body)
         }
     }
+    /** تعيين تصنيف الخبر يدوياً؛ "" يزيله. القيم المسموحة نفس قيد قاعدة البيانات. */
+    suspend fun setNewsCategory(ref: String, wire: String) {
+        require(wire.isEmpty() || AdminRules.categoryLabel(wire).isNotEmpty())
+        write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("category", if (wire.isEmpty()) JSONObject.NULL else wire))
+    }
     /** تمييز الخبر في شريط «أبرز الأخبار» أو إلغاء التمييز. */
     suspend fun setNewsFeatured(ref: String, featured: Boolean) =
         write("PATCH", "news?id=eq.${AdminRules.safeId(ref)}", JSONObject().put("is_featured", featured))

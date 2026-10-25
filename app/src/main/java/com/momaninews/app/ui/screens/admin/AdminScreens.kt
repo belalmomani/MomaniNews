@@ -90,6 +90,7 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                 AdminAction("تعديل العنوان", prompt = "العنوان المعروض", promptDefault = n.title) { i, text -> r.editNewsText(i.ref, text, null) },
                 AdminAction("تعديل الملخص", prompt = "الملخص المعروض", promptDefault = n.extra) { i, text -> r.editNewsText(i.ref, null, text) },
                 AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") },
+                categoryAction(r),
                 AdminAction("حظر الناشر ورفض", danger = true, confirm = "حظر الناشر «${n.source}»؟ سيُرفض كل خبر قادم منه، ويُرفض هذا الخبر الآن. يمكنك رفع الحظر من تبويب «ناشرون محظورون».") { i, _ ->
                     r.addBlockedPublisher(i.source)
                     r.rejectNews(i.ref, "ناشر محظور: " + i.source)
@@ -138,6 +139,7 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
             },
             AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { n -> listOf(
                 AdminAction(if (n.flag) "إلغاء التمييز" else "تمييز في أبرز الأخبار") { i, _ -> r.setNewsFeatured(i.ref, !i.flag) },
+                categoryAction(r),
                 AdminAction("أرشفة", confirm = "أرشفة الخبر (يختفي من التطبيق)؟") { i, _ -> r.setNewsStatus(i.ref, "archived") },
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },
                 AdminAction("حذف", danger = true, confirm = "حذف الخبر نهائياً؟") { i, _ -> r.deleteNews(i.ref) }
@@ -352,3 +354,15 @@ fun AdminNotifyScreen(onBack: () -> Unit) = AdminGate("إشعار عام", onBac
         }
     }
 }
+
+/** تغيير تصنيف الخبر يدوياً (يتجاوز تصنيف الجالب). «بلا تصنيف» يزيله. */
+private fun categoryAction(r: com.momaninews.app.data.admin.AdminRepository) = AdminAction(
+    "تغيير التصنيف",
+    groups = listOf(
+        ChoiceGroup(
+            "التصنيف",
+            listOf("بلا تصنيف" to "") + com.momaninews.app.data.model.NewsCategories.all.map { "${it.emoji} ${it.label}" to it.wire }
+        )
+    ),
+    compose = { _, p -> p[0] }
+) { i, text -> r.setNewsCategory(i.ref, text ?: "") }

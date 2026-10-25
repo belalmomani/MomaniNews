@@ -1,0 +1,30 @@
+name: Classify old news
+
+# يدوي فقط: يصنّف الأخبار القديمة غير المصنّفة. شغّله أولاً بـ dry_run=true لترى النتيجة قبل الكتابة.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "تجربة بلا كتابة (true/false)"
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  reclassify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Classify
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DRY: ${{ github.event.inputs.dry_run }}
+        run: |
+          if [ "$DRY" = "false" ]; then python -m momani_fetcher.reclassify; else python -m momani_fetcher.reclassify --dry-run; fi

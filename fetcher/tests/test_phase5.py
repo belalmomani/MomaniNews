@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from momani_fetcher import classify, feeds, matcher, run, watchdog
+from momani_fetcher import classify, feeds, matcher, reclassify, run, watchdog
 from momani_fetcher.store import StoreError, SupabaseStore
 
 from tests.test_phase4 import KWROWS, NOW, Rec, days, rssd, src
@@ -130,6 +130,48 @@ class BlockedPublisherTests(unittest.TestCase):
             def _call(self, *a, **k): raise StoreError("boom", 500)
         with self.assertRaises(StoreError):
             S().blocked_publishers()
+
+
+class FakeNewsStore:
+    def __init__(self, rows):
+        self.rows = {r["id"]: dict(r) for r in rows}
+        self.writes = []
+    def unclassified_news(self, limit=500, after_id=0):
+        return [r for r in sorted(self.rows.values(), key=lambda r: r["id"]) if r["id"] > after_id and not r.get("category")][:limit]
+    def set_category(self, news_id, category):
+        self.writes.append((news_id, category)); self.rows[news_id]["category"] = category
+
+
+class ReclassifyTests(unittest.TestCase):
+    ROWS = [{"id": 1, "title": "ينعى أهالي عبين المرحوم", "excerpt": ""},
+            {"id": 2, "title": "لقاء مع الوجهاء", "excerpt": ""},
+            {"id": 3, "title": "تكريم المتفوقين", "excerpt": ""},
+            {"id": 4, "title": "تصادم على الطريق", "excerpt": "", "category": "services"}]   # مصنّف يدوياً: لا يُمسّ
+
+    def test_classifies_only_null_and_leaves_manual_alone(self):
+        st = FakeNewsStore(self.ROWS)
+        rep = reclassify.run_reclassify(st)
+        self.assertEqual(sorted(st.writes), [(1, "death"), (3, "achievement")])
+        self.assertEqual(st.rows[4]["category"], "services")
+        self.assertEqual((rep["seen"], rep["classified"], rep["unmatched"]), (3, 2, 1))
+
+    def test_dry_run_writes_nothing(self):
+        st = FakeNewsStore(self.ROWS)
+        rep = reclassify.run_reclassify(st, dry_run=True)
+        self.assertEqual(st.writes, [])
+        self.assertEqual(rep["classified"], 2)
+        self.assertIn("dry-run", reclassify.report(rep))
+
+    def test_unmatched_not_revisited_forever(self):
+        st = FakeNewsStore([{"id": i, "title": "لقاء عام", "excerpt": ""} for i in range(1, 8)])
+        rep = reclassify.run_reclassify(st)
+        self.assertEqual(rep["seen"], 7)      # الحلقة تتقدم بالمعرّف فلا تعيد فحص غير المطابق
+
+    def test_total_cap(self):
+        st = FakeNewsStore([{"id": i, "title": "ينعى", "excerpt": ""} for i in range(1, 30)])
+        rep = reclassify.run_reclassify(st, max_total=10)
+        self.assertGreaterEqual(rep["seen"], 10)
+        self.assertLessEqual(rep["seen"], reclassify.BATCH + 10)
 
 
 if __name__ == "__main__":
