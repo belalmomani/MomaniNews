@@ -31,6 +31,7 @@ MAX_NOTED_DOMAINS = 40  # مرشحون جدد من داخل الأخبار في 
 
 @dataclass
 class Stats:
+    blocked: tuple = ()   # ناشرون حظرهم المدير (نطاقات أو أسماء)
     sources_total: int = 0
     sources_failed: int = 0
     items_seen: int = 0
@@ -243,7 +244,7 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
     for it in items:
         # قبل المطابقة: ناشر الداخل الفلسطيني، وخبر بحث قديم جداً (مثل «ليالي ميلاد 2013»)
         block = None
-        if matcher.is_non_local_publisher(it.link, it.publisher_url, it.publisher):
+        if matcher.is_non_local_publisher(it.link, it.publisher_url, it.publisher, stats.blocked):
             block = matcher.R_NON_LOCAL
         elif origin == "search" and it.published and it.published < now - MAX_SEARCH_AGE:
             block = matcher.R_TOO_OLD
@@ -366,6 +367,12 @@ def run(store, trigger: str = "schedule", fetch=feeds.http_get, pages: int = 1, 
                 ensure(queries.search_source_rows() + queries.extended_source_rows())
             except StoreError as e:
                 stats.errors.append(f"تسجيل استعلامات البحث: {e}")
+        getb = getattr(store, "blocked_publishers", None)
+        if getb:
+            try:
+                stats.blocked = tuple(getb())
+            except StoreError as e:
+                stats.errors.append(f"قائمة الناشرين المحظورين: {e}")
         sources = store.active_sources()
         keywords = [matcher.Keyword(k["word"], k["kind"], k.get("region_id"), bool(k.get("needs_context"))) for k in store.active_keywords()]
         stats.sources_total = len(sources)

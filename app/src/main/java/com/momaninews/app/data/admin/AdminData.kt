@@ -26,7 +26,9 @@ data class AdminItem(
     val meta: String,
     val body: String = "",
     val extra: String = "",
-    val flag: Boolean = false
+    val flag: Boolean = false,
+    /** اسم الناشر/المصدر (للأخبار)؛ يُستخدم لحظر الناشر من بطاقة الخبر. */
+    val source: String = ""
 )
 
 val ADMIN_REGIONS = listOf("abeen" to "عبين", "abelin" to "عبلين", "sakhra" to "صخرة", "momani" to "أخبار المومني")
@@ -81,6 +83,12 @@ object AdminRules {
         if ((kind == "region" || kind == "alias") && region == null) region = REGION_NAMES[word]
         if ((kind == "region" || kind == "alias") && region == null) return null
         return KeywordInput(kind, word, region, ctx)
+    }
+
+    /** قيمة ناشر صالحة للحظر: 2..120 حرفاً بعد القص وتوحيد الفراغات، وبلا رموز تحكم؛ وإلا null. */
+    fun cleanPublisher(text: String?): String? {
+        val v = text.orEmpty().replace(Regex("\\s+"), " ").trim()
+        return if (v.length in 2..120 && v.none { it.isISOControl() }) v else null
     }
 
     /** تسمية تصنيف الخبر (من الجالب)؛ فارغ لغير المصنّف أو لقيمة غير معروفة. */
@@ -180,7 +188,8 @@ object AdminParser {
                     fetchInfo(r)
                 ).filter { it.isNotBlank() }.joinToString("\n\n"),
                 extra = str(r, "excerpt"),
-                flag = r.optBoolean("is_featured", false)
+                flag = r.optBoolean("is_featured", false),
+                source = str(r, "source_name")
             )
         }
     }
@@ -659,6 +668,25 @@ class AdminRepository(
         write("POST", "blocked_words", JSONObject().put("word", w))
     }
     suspend fun deleteBlockedWord(ref: String) = write("DELETE", "blocked_words?id=eq.${AdminRules.safeId(ref)}", null)
+
+    // ---- ناشرون محظورون (يرفضهم الجالب): نطاق مثل example.com أو اسم ناشر
+    suspend fun blockedPublishers(): List<AdminItem> {
+        val a = JSONArray(get("blocked_publishers?select=id,value,created_at&order=created_at.desc&limit=300"))
+        return List(a.length()) { i ->
+            val r = a.getJSONObject(i)
+            AdminItem(ref = r.get("id").toString(), title = r.optString("value"), meta = SupabaseNewsParser.formatDate(if (r.isNull("created_at")) "" else r.optString("created_at", "")))
+        }
+    }
+    /** يضيف ناشراً؛ المكرر (بلا اعتبار للحالة) يُعدّ نجاحاً صامتاً (409). */
+    suspend fun addBlockedPublisher(text: String) {
+        val v = AdminRules.cleanPublisher(text) ?: throw IllegalArgumentException("قيمة غير صالحة")
+        try {
+            write("POST", "blocked_publishers", JSONObject().put("value", v))
+        } catch (e: IOException) {
+            if (e.message?.contains("409") != true) throw e
+        }
+    }
+    suspend fun deleteBlockedPublisher(ref: String) = write("DELETE", "blocked_publishers?id=eq.${AdminRules.safeId(ref)}", null)
 
     // ---- إشعار عام
     suspend fun broadcast(title: String, body: String, newsId: Int?) {

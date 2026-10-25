@@ -27,18 +27,22 @@ NON_LOCAL_DOMAINS = ("arab48.com", "kul-alarab.com", "bokra.net", "panet.co.il",
 NON_LOCAL_NAMES = ("arab48", "عرب 48", "كل العرب", "kul alarab", "kul-alarab", "bokra", "بكرا", "panet", "السينارة")
 
 
-def is_non_local_publisher(link: str, publisher_url: str, publisher: str) -> bool:
+def is_non_local_publisher(link: str, publisher_url: str, publisher: str, extra: tuple | list = ()) -> bool:
+    """الناشر محظور إن كان في القائمة الثابتة أو في [extra] (يديرها المدير من التطبيق: نطاق مثل x.com أو اسم ناشر)."""
     from urllib.parse import urlsplit
     from .normalize import normalize
+    extra_domains = tuple(v.strip().lower().removeprefix("www.") for v in extra if "." in v and " " not in v.strip())
+    extra_names = tuple(v for v in extra if v and v not in extra_domains and not ("." in v and " " not in v.strip()))
+    domains = NON_LOCAL_DOMAINS + extra_domains
     for u in (link, publisher_url):
         try:
             h = (urlsplit(u or "").hostname or "").lower().removeprefix("www.")
         except ValueError:
             h = ""
-        if h and any(h == d or h.endswith("." + d) for d in NON_LOCAL_DOMAINS):
+        if h and any(h == d or h.endswith("." + d) for d in domains):
             return True
     name = normalize(publisher or "")
-    return bool(name) and any(normalize(n) == name or normalize(n) in name.split(" ") for n in NON_LOCAL_NAMES)
+    return bool(name) and any(normalize(n) and (normalize(n) == name or normalize(n) in name.split(" ")) for n in NON_LOCAL_NAMES + extra_names)
 
 
 # سياق اجتماعي/عشائري يكفي مع اسم «المومني» (ثابت في الكود لأنه قاعدة قرار لا بيانات تُدار؛ السياق المحلي يأتي من جدول keywords).

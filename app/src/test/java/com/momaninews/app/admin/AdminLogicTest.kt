@@ -242,4 +242,14 @@ class AdminLogicTest {
         assertEquals("", AdminRules.categoryLabel(""))
         assertEquals("", AdminRules.categoryLabel("bogus"))
     }
+
+    @Test fun cleanPublisher_rules() {
+        assertEquals("kul alarab", AdminRules.cleanPublisher("  kul   alarab "))
+        assertEquals("example.com", AdminRules.cleanPublisher("example.com"))
+        assertNull(AdminRules.cleanPublisher("x"))
+        assertNull(AdminRules.cleanPublisher("   "))
+        assertNull(AdminRules.cleanPublisher(null))
+        assertNull(AdminRules.cleanPublisher("a".repeat(121)))
+        assertNull(AdminRules.cleanPublisher("bad\u0000name"))
+    }
 }

@@ -89,7 +89,11 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
                 AdminAction("اعتماد") { i, _ -> r.setNewsStatus(i.ref, "approved") },
                 AdminAction("تعديل العنوان", prompt = "العنوان المعروض", promptDefault = n.title) { i, text -> r.editNewsText(i.ref, text, null) },
                 AdminAction("تعديل الملخص", prompt = "الملخص المعروض", promptDefault = n.extra) { i, text -> r.editNewsText(i.ref, null, text) },
-                AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") }
+                AdminAction("رفض مع سبب", danger = true, prompt = "سبب الرفض (للمشرفين فقط)") { i, text -> r.rejectNews(i.ref, text ?: "") },
+                AdminAction("حظر الناشر ورفض", danger = true, confirm = "حظر الناشر «${n.source}»؟ سيُرفض كل خبر قادم منه، ويُرفض هذا الخبر الآن. يمكنك رفع الحظر من تبويب «ناشرون محظورون».") { i, _ ->
+                    r.addBlockedPublisher(i.source)
+                    r.rejectNews(i.ref, "ناشر محظور: " + i.source)
+                }
             ) },
             AdminTab("عمليات الجلب", "لا توجد عمليات جلب بعد", { r.fetchRuns() }) { emptyList() },
             AdminTab("الكلمات المفتاحية", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة", meta = "اكتب الكلمة ثم اختر نوعها. يمكنك كتابة عدة كلمات، كلمة في كل سطر.")) + r.keywords() }) { k ->
@@ -127,6 +131,10 @@ fun AdminNewsScreen(onBack: () -> Unit) = AdminGate("الأخبار", onBack) { 
             AdminTab("كلمات محظورة", "لا توجد كلمات", { listOf(AdminItem(ref = "add", title = "＋ إضافة كلمة محظورة", meta = "الخبر المعلّق الذي يحويها يظهر أولاً مع ⚠، والتعليق الذي يحويها يُخفى تلقائياً")) + r.blockedWords() }) { w ->
                 if (w.ref == "add") listOf(AdminAction("إضافة", prompt = "الكلمة (حرفان فأكثر)") { _, text -> r.addBlockedWord(text ?: "") })
                 else listOf(AdminAction("حذف", danger = true, confirm = "حذف الكلمة من القائمة؟") { i, _ -> r.deleteBlockedWord(i.ref) })
+            },
+            AdminTab("ناشرون محظورون", "لا يوجد ناشرون محظورون", { listOf(AdminItem(ref = "add", title = "＋ حظر ناشر", meta = "اكتب نطاقاً (مثل example.com) أو اسم ناشر. أخباره تُرفض عند الجلب.")) + r.blockedPublishers() }) { p ->
+                if (p.ref == "add") listOf(AdminAction("إضافة", prompt = "النطاق أو اسم الناشر") { _, text -> r.addBlockedPublisher(text ?: "") })
+                else listOf(AdminAction("رفع الحظر", danger = true, confirm = "رفع الحظر عن هذا الناشر؟") { i, _ -> r.deleteBlockedPublisher(i.ref) })
             },
             AdminTab("الأخرى", "لا توجد أخبار", { r.allNews() }) { n -> listOf(
                 AdminAction(if (n.flag) "إلغاء التمييز" else "تمييز في أبرز الأخبار") { i, _ -> r.setNewsFeatured(i.ref, !i.flag) },

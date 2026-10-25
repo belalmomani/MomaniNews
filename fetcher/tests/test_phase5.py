@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from momani_fetcher import classify, feeds, run, watchdog
+from momani_fetcher import classify, feeds, matcher, run, watchdog
 from momani_fetcher.store import StoreError, SupabaseStore
 
 from tests.test_phase4 import KWROWS, NOW, Rec, days, rssd, src
@@ -94,6 +94,42 @@ class WatchdogTests(unittest.TestCase):
 
     def test_unreadable_date(self):
         self.assertTrue(watchdog.evaluate([{"started_at": "???"}], NOW))
+
+
+class BlockedPublisherTests(unittest.TestCase):
+    def setUp(self): feeds._ROBOTS_CACHE.clear()
+
+    def test_extra_domain_and_name(self):
+        f = matcher.is_non_local_publisher
+        self.assertFalse(f("https://bad.example/a", "", "سيء"))
+        self.assertTrue(f("https://news.bad.example/a", "", "", ["Bad.Example"]))
+        self.assertTrue(f("https://x.example/a", "https://www.bad.example", "", ["bad.example"]))
+        self.assertTrue(f("https://x.example/a", "", "شبكة سيئة", ["سيئة"]))
+        self.assertFalse(f("https://x.example/a", "", "سيئة جداً بالاسم الكامل", ["سيء"]))   # تطابق كلمة كاملة لا جزء كلمة
+        self.assertFalse(f("https://ok.example/a", "", "عمون", ["bad.example", "سيئة"]))
+        self.assertFalse(f("https://ok.example/a", "", "", [""]))                         # قيمة فارغة لا تحظر الجميع
+
+    def test_run_applies_admin_list(self):
+        data = rssd([("افتتاح مدرسة في عبين", "https://bad.example/1", "d", days(0), "", ""),
+                     ("افتتاح مركز صحي في عبين", "https://good.example/2", "d", days(0), "", "")])
+        st = Rec([{"id": 1, "name": "موقع", "url": "https://site.example/feed", "kind": "rss", "origin": "manual"}], KWROWS)
+        st.blocked_publishers = lambda: ["bad.example"]
+        stats = run.run(st, fetch=lambda u: data, now=NOW)
+        self.assertEqual([n["title"] for n in st.news], ["افتتاح مركز صحي في عبين"])
+        self.assertEqual(stats.reject_reasons[matcher.R_NON_LOCAL], 1)
+
+    def test_store_missing_table_means_empty_list(self):
+        class S(SupabaseStore):
+            def __init__(self): pass
+            def _call(self, *a, **k): raise StoreError("relation does not exist", 404)
+        self.assertEqual(S().blocked_publishers(), [])
+
+    def test_store_other_errors_propagate(self):
+        class S(SupabaseStore):
+            def __init__(self): pass
+            def _call(self, *a, **k): raise StoreError("boom", 500)
+        with self.assertRaises(StoreError):
+            S().blocked_publishers()
 
 
 if __name__ == "__main__":

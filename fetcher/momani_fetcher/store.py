@@ -210,6 +210,15 @@ class SupabaseStore:
     def save_link_check(self, row: dict) -> None:
         self._call("POST", "link_checks?on_conflict=news_id", row, prefer="resolution=merge-duplicates,return=minimal")
 
+    def blocked_publishers(self) -> list[str]:
+        """قيم الجدول blocked_publishers (الترحيل 20261025110000). غيابه = قائمة فارغة، فلا يتعطل الجلب."""
+        try:
+            return [r["value"] for r in (self._call("GET", "blocked_publishers?select=value&limit=500") or []) if r.get("value")]
+        except StoreError as e:
+            if e.code in (400, 404):
+                return []
+            raise
+
     def recent_runs(self, limit: int = 8) -> list[dict]:
         return self._call("GET", f"fetch_runs?select=id,started_at,finished_at,sources_total,sources_failed,items_seen,error_summary&order=started_at.desc&limit={int(limit)}") or []
 

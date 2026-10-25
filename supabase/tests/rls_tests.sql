@@ -395,6 +395,15 @@ begin
   perform t.chk('link_checks: المستخدم لا يرى', t.sel(ua, au, 'select count(*) from public.link_checks'), '0');
   perform t.chk('link_checks: الزائر محظور', t.sel(null, anon, 'select count(*) from public.link_checks'), 'ERR:42501');
   perform t.chk('link_checks: الأدمن لا يكتب', t.dml(uc, au, format($q$update public.link_checks set status='ok' where news_id=%s$q$, n_pend)), 'ERR:42501');
+  perform t.chk('blocked_publishers: الأدمن يضيف', t.dml(uc, au, $q$insert into public.blocked_publishers (value) values ('Example.com')$q$), '1');
+  perform t.chk('blocked_publishers: تكرار مرفوض (بلا اعتبار للحالة)', t.dml(uc, au, $q$insert into public.blocked_publishers (value) values ('example.COM')$q$), 'ERR:23505');
+  perform t.chk('blocked_publishers: قيمة قصيرة مرفوضة', t.dml(uc, au, $q$insert into public.blocked_publishers (value) values ('x')$q$), 'ERR:23514');
+  perform t.chk('blocked_publishers: المستخدم لا يضيف', t.dml(ua, au, $q$insert into public.blocked_publishers (value) values ('evil.com')$q$), 'ERR:42501');
+  perform t.chk('blocked_publishers: المستخدم لا يقرأ', t.sel(ua, au, 'select count(*) from public.blocked_publishers'), '0');
+  perform t.chk('blocked_publishers: الزائر محظور', t.sel(null, anon, 'select count(*) from public.blocked_publishers'), 'ERR:42501');
+  perform t.chk('blocked_publishers: الأدمن يقرأ', t.sel(uc, au, 'select count(*) from public.blocked_publishers'), '1');
+  perform t.chk('blocked_publishers: المستخدم لا يحذف', t.dml(ua, au, 'delete from public.blocked_publishers'), '0');
+  perform t.chk('blocked_publishers: الأدمن يحذف', t.dml(uc, au, 'delete from public.blocked_publishers'), '1');
   perform t.chk('fetch: news_refs للأدمن فقط', t.sel(ua, au, 'select count(*) from public.news_refs'), '0');
   perform t.chk('fetch: الزائر لا يقرأ news_refs', t.sel(null, anon, 'select count(*) from public.news_refs'), 'ERR:42501');
 
