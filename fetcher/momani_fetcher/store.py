@@ -226,6 +226,9 @@ class SupabaseStore:
     def set_category(self, news_id: int, category: str) -> None:
         self._call("PATCH", f"news?id=eq.{int(news_id)}&category=is.null", {"category": category}, prefer="return=minimal")
 
+    def failing_sources(self) -> list[dict]:
+        return self._call("GET", "sources?select=id,name,url,kind,last_error&is_active=eq.true&last_status=eq.error&origin=neq.search&order=id.asc&limit=60") or []
+
     def recent_runs(self, limit: int = 8) -> list[dict]:
         return self._call("GET", f"fetch_runs?select=id,started_at,finished_at,sources_total,sources_failed,items_seen,error_summary&order=started_at.desc&limit={int(limit)}") or []
 

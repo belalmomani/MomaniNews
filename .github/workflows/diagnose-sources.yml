@@ -1,0 +1,24 @@
+name: Diagnose failing sources
+
+# يدوي فقط ولا يكتب في القاعدة: يفحص المصادر المباشرة المتعطلة ويقترح لكل منها إجراءً. النتيجة في Summary.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe failing sources
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m momani_fetcher.probe_sources
