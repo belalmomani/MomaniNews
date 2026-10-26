@@ -1,0 +1,39 @@
+name: Backfill media
+
+# يدوي فقط: يملأ صور/فيديو الأخبار القديمة من صفحاتها عند المصدر (og:image/og:video) مع احترام robots.txt وفاصل بين الطلبات.
+# شغّله أولاً بـ dry_run=true لترى ما سيجده. للدفعة التالية ضع before_id الذي يطبعه التقرير.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "تجربة بلا كتابة (true/false)"
+        default: "true"
+      limit:
+        description: "عدد الأخبار في هذا التشغيل (حتى 300)"
+        default: "100"
+      before_id:
+        description: "اتركه فارغاً للبدء من الأحدث، أو ضع رقماً لمتابعة الأقدم"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Backfill media
+        working-directory: fetcher
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DRY: ${{ github.event.inputs.dry_run }}
+          BACKFILL_LIMIT: ${{ github.event.inputs.limit }}
+          BACKFILL_BEFORE_ID: ${{ github.event.inputs.before_id }}
+        run: |
+          if [ "$DRY" = "false" ]; then python -m momani_fetcher.backfill_media; else python -m momani_fetcher.backfill_media --dry-run; fi

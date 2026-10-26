@@ -229,6 +229,18 @@ class SupabaseStore:
     def set_category(self, news_id: int, category: str) -> None:
         self._call("PATCH", f"news?id=eq.{int(news_id)}&category=is.null", {"category": category}, prefer="return=minimal")
 
+    # ---- تعبئة صور/فيديو الأخبار القديمة (backfill_media)
+    def news_without_image(self, limit: int = 100, before_id: int | None = None) -> list[dict]:
+        cond = f"&id=lt.{int(before_id)}" if before_id else ""
+        return self._call("GET", f"news?select=id,original_url&status=eq.approved&image_url=is.null&original_url=not.is.null{cond}&order=id.desc&limit={int(limit)}") or []
+
+    def set_media(self, news_id: int, image_url: str | None, video_url: str | None) -> None:
+        """يكتب الوسائط فقط حيث الحقل فارغ (لا يستبدل صورة أو فيديو موجودَين)."""
+        if image_url:
+            self._call("PATCH", f"news?id=eq.{int(news_id)}&image_url=is.null", {"image_url": image_url}, prefer="return=minimal")
+        if video_url:
+            self._call("PATCH", f"news?id=eq.{int(news_id)}&video_url=is.null", {"video_url": video_url}, prefer="return=minimal")
+
     def failing_sources(self) -> list[dict]:
         return self._call("GET", "sources?select=id,name,url,kind,last_error&is_active=eq.true&last_status=eq.error&origin=neq.search&order=id.asc&limit=60") or []
 
