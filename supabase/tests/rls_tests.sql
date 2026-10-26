@@ -575,6 +575,39 @@ begin
   perform t.chk('delete_my_account: المحظور يستطيع حذف حسابه', t.sel(ud, au, 'select public.delete_my_account()::text'), '');
   perform t.chk('delete_my_account: الآخرون لم يتأثروا', t.sel(null, su, 'select count(*) from public.users'), '1');
 
+  -- ---------- إشعار تلقائي عند الاعتماد ----------
+  delete from public.notifications where user_id is null;
+  perform t.chk('push: الإعداد الافتراضي important', t.sel(uc, au, 'select mode from public.push_settings'), 'important');
+  perform t.chk('push: المستخدم لا يقرأ الإعدادات', t.sel(ua, au, 'select count(*) from public.push_settings'), '0');
+  perform t.chk('push: الزائر مرفوض', t.sel(null, anon, 'select count(*) from public.push_settings'), 'ERR:42501');
+  perform t.chk('push: المستخدم لا يعدّل', t.dml(ua, au, 'update public.push_settings set mode=''all'''), '0');
+  perform t.chk('push: الأدمن لا يعدّل وضعاً غير صالح', t.dml(uc, au, 'update public.push_settings set mode=''x'''), 'ERR:23514');
+  insert into public.news (title, content, region_id, status, category) values ('خبر عادي معتمد', 'نص', 'abeen', 'approved', 'sports');
+  perform t.chk('push: important لا يرسل الرياضة', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '0');
+  insert into public.news (title, content, region_id, status, category) values ('وفاة فلان', 'نص', 'abeen', 'approved', 'death');
+  perform t.chk('push: important يرسل الوفاة', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '1');
+  perform t.chk('push: الإشعار يحمل العنوان ورقم الخبر', t.sel(null, su, $q$select count(*) from public.notifications n join public.news x on x.id=n.news_id where n.user_id is null and n.title='وفاة فلان'$q$), '1');
+  insert into public.news (title, content, region_id, status, category) values ('حادث ثانٍ', 'نص', 'abeen', 'approved', 'incident');
+  perform t.chk('push: الحوادث لا تُخفَّف', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '2');
+  insert into public.news (title, content, region_id, category) values ('معلق يُعتمد', 'نص', 'abeen', 'death') returning id into n_pend;
+  perform t.chk('push: المعلّق لا يرسل', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '2');
+  update public.news set status = 'approved' where id = n_pend;
+  perform t.chk('push: الاعتماد اللاحق يرسل', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '3');
+  update public.news set title = 'معدّل' where id = n_pend;
+  perform t.chk('push: تعديل المعتمد لا يكرر', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '3');
+  insert into public.news (title, content, region_id, status, category, published_at) values ('وفاة مجدولة', 'نص', 'abeen', 'approved', 'death', now() + interval '1 day');
+  perform t.chk('push: المجدول لا يرسل', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '3');
+  update public.push_settings set mode = 'all';
+  insert into public.news (title, content, region_id, status, category) values ('خبر all أول', 'نص', 'abeen', 'approved', 'sports');
+  perform t.chk('push: all يخفّف (آخر عام قبل لحظات)', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '3');
+  update public.notifications set created_at = now() - interval '1 hour' where user_id is null;
+  insert into public.news (title, content, region_id, status, category) values ('خبر all ثانٍ', 'نص', 'abeen', 'approved', 'sports');
+  perform t.chk('push: all يرسل بعد انقضاء الفاصل', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '4');
+  update public.push_settings set mode = 'off';
+  insert into public.news (title, content, region_id, status, category) values ('وفاة بعد الإيقاف', 'نص', 'abeen', 'approved', 'death');
+  perform t.chk('push: off لا يرسل شيئاً', t.sel(null, su, 'select count(*) from public.notifications where user_id is null'), '4');
+  update public.push_settings set mode = 'important';
+
   -- ---------- النتيجة ----------
   select count(*) into total from t.results;
   select string_agg(name || ' [فعلي=' || coalesce(actual, 'NULL') || ' متوقع=' || coalesce(expected, 'NULL') || ']', E'\n')

@@ -153,7 +153,13 @@ fun HomeScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = { BannerAd() },
+        bottomBar = {
+            androidx.compose.foundation.layout.Column {
+                // شريط الأخبار فوق الإعلان؛ من أحدث الأخبار المحمّلة بغضّ النظر عن التصفية
+                com.momaninews.app.ui.components.NewsTicker(items = state.featured.ifEmpty { state.allNews.take(15) })
+                BannerAd()
+            }
+        },
         topBar = {
             TopAppBar(
                 navigationIcon = {
