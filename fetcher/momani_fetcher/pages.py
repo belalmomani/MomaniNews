@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
-from . import dedup
+from . import dedup, media
 from .feeds import FeedError, FeedItem, MAX_TEXT, looks_like_html, parse_date, robots_allows, strip_html
 
 MAX_PAGES_PER_SOURCE = 25      # صفحات مقالات تُجلب لكل مصدر في الدورة الواحدة (الأحدث أولاً)
@@ -77,7 +77,9 @@ def extract_page(data: bytes, url: str, now: datetime | None = None) -> FeedItem
     text = " ".join(x for x in paras if len(x) > 30)[:MAX_TEXT]
     if not desc and text:
         desc = text[:600]
-    return FeedItem(title[:300], url, desc, parse_date(when, now), text)
+    img = media.good_image(meta.get("og:image:secure_url") or meta.get("og:image") or meta.get("twitter:image"))
+    vid = next((v for v in (media.clean_url(meta.get(k)) for k in ("og:video:secure_url", "og:video:url", "og:video")) if v and media.is_video_url(v)), None)
+    return FeedItem(title[:300], url, desc, parse_date(when, now), text, image_url=img or "", video_url=vid or "")
 
 
 def parse_sitemap(data: bytes) -> tuple[list[str], list[dict]]:

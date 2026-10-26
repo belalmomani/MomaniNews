@@ -321,6 +321,10 @@ def process_source(store, source: dict, keywords: list[matcher.Keyword], stats: 
             "fetch_note": (m.note or None),
             "category": classify.classify(it.title, excerpt),
         }
+        if it.image_url:
+            row["image_url"] = it.image_url
+        if it.video_url:
+            row["video_url"] = it.video_url
         new_id = store.insert_news(row)
         if new_id:
             inserted += 1

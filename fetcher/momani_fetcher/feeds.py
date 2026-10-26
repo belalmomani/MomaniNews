@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree as ET
 
+from . import media
+
 MAX_BYTES = 6 * 1024 * 1024
 MAX_TEXT = 20_000
 TIMEOUT = 20
@@ -27,6 +29,8 @@ class FeedItem:
     publisher_url: str = ""  # موقع الناشر الأصلي (سمة url في <source>) لاكتشاف مصادر جديدة
     publisher: str = ""  # اسم الناشر الأصلي إن وفّرته الخلاصة (مثل عنصر <source> في خلاصات البحث)
     links: tuple = ()    # روابط https داخل نص الخبر (لاكتشاف مواقع إخبارية مذكورة فيه)
+    image_url: str = ""  # صورة الخبر عند المصدر (رابط https فقط)
+    video_url: str = ""  # فيديو MP4 عند المصدر (رابط https فقط)
 
 
 class FeedError(Exception):
@@ -161,10 +165,11 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
             publisher = strip_html(_text(f.get("source")), 120)
             if publisher and title.endswith(" - " + publisher):  # خلاصات البحث تلحق اسم الناشر بالعنوان
                 title = title[: -len(" - " + publisher)].rstrip()
+            img, vid = media.from_element(n)
             items.append(FeedItem(title, link.strip(), strip_html(summary, 600),
                                   parse_date(_text(f.get("pubDate")) or _text(f.get("date")), now),
                                   strip_html(full, MAX_TEXT), publisher_url=(f["source"].get("url", "") if "source" in f else ""), publisher=publisher,
-                                  links=html_links(full)))
+                                  links=html_links(full), image_url=img or media.first_image(full) or "", video_url=vid or ""))
     elif kind == "feed":
         for n in [e for e in root if _local(e.tag) == "entry"]:
             link = ""
@@ -175,9 +180,11 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[FeedItem]:
             f = {_local(c.tag): c for c in n}
             summary = _text(f.get("summary")) or _text(f.get("content"))
             full = _text(f.get("summary")) + " " + _text(f.get("content"))
+            img, vid = media.from_element(n)
             items.append(FeedItem(strip_html(_text(f.get("title"))), link.strip(), strip_html(summary, 600),
                                   parse_date(_text(f.get("published")) or _text(f.get("updated")), now),
-                                  strip_html(full, MAX_TEXT), links=html_links(full)))
+                                  strip_html(full, MAX_TEXT), links=html_links(full),
+                                  image_url=img or media.first_image(full) or "", video_url=vid or ""))
     else:
         raise FeedError("not an RSS/Atom feed")
     return [i for i in items if i.title and i.link]

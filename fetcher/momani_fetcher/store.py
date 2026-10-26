@@ -172,6 +172,9 @@ class SupabaseStore:
             if e.code == 400 and "category" in row and "category" in str(e):
                 self.category_supported = False
                 return self.insert_news(row)
+            if e.code == 400 and ("image_url" in row or "video_url" in row):
+                # رابط وسائط رفضه قيد القاعدة: نحفظ الخبر بلا وسائط بدل أن نفقده
+                return self.insert_news({k: v for k, v in row.items() if k not in ("image_url", "video_url")})
             raise
         return res[0]["id"] if res else None
 

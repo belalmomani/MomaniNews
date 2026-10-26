@@ -35,6 +35,20 @@ data class NewsItem(
     val category: String? = null
 )
 
+/** تصفية الأخبار بحسب الوسائط: صور أو فيديو. null = كل الأخبار. */
+enum class MediaKind(val label: String) {
+    PHOTOS("أخبار بالصور"), VIDEOS("أخبار بالفيديو");
+
+    fun matches(n: NewsItem): Boolean = when (this) {
+        PHOTOS -> !n.imageUrl.isNullOrBlank()
+        VIDEOS -> !n.videoUrl.isNullOrBlank()
+    }
+
+    companion object {
+        fun filter(items: List<NewsItem>, kind: MediaKind?): List<NewsItem> = if (kind == null) items else items.filter { kind.matches(it) }
+    }
+}
+
 /** تصنيفات الأخبار (نفس قيم عمود news.category). الترتيب هو ترتيب أزرار التصفية. */
 object NewsCategories {
     data class Cat(val wire: String, val emoji: String, val label: String)

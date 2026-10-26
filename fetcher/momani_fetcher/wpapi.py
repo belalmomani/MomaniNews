@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlparse
 
+from . import media
 from .feeds import FeedError, FeedItem, MAX_TEXT, html_links, parse_date, robots_allows, strip_html
 
 PER_PAGE = 50
@@ -40,7 +41,9 @@ def parse_posts(data: bytes, now: datetime | None = None) -> list[FeedItem]:
         raw_content = str((p.get("content") or {}).get("rendered", ""))
         content = strip_html(raw_content, MAX_TEXT)
         when = p.get("date_gmt")
-        out.append(FeedItem(title[:300], link, excerpt or content[:600], parse_date(f"{when}+00:00" if when else None, now), content, links=html_links(raw_content)))
+        img = media.good_image(p.get("jetpack_featured_media_url")) or media.first_image(raw_content)
+        out.append(FeedItem(title[:300], link, excerpt or content[:600], parse_date(f"{when}+00:00" if when else None, now), content,
+                            links=html_links(raw_content), image_url=img or ""))
     return out
 
 

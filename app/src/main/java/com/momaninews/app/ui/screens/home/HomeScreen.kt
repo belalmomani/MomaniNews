@@ -47,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import com.momaninews.app.data.auth.AuthRepositories
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -98,11 +100,14 @@ fun HomeScreen(
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     val notHidden = com.momaninews.app.data.settings.PostPrefsLogic.withoutHidden(state.visibleNews, hiddenIds.toSet())
     val byFollow = if (followedOnly) com.momaninews.app.data.settings.FollowLogic.onlyFollowed(notHidden, followedSet) else notHidden
-    val visibleNews = com.momaninews.app.data.model.NewsCategories.filter(byFollow, categoryFilter)
+    var mediaFilter by remember { mutableStateOf<com.momaninews.app.data.model.MediaKind?>(null) }
+    val visibleNews = com.momaninews.app.data.model.MediaKind.filter(
+        com.momaninews.app.data.model.NewsCategories.filter(byFollow, categoryFilter), mediaFilter
+    )
 
     // في عرض «المتابَعة» نكمل جلب الصفحات تلقائياً (بحد أقصى) حتى تظهر أخبار كافية من المصادر المتابَعة
-    androidx.compose.runtime.LaunchedEffect(followedOnly, categoryFilter, followedSet, state.allNews.size, state.canLoadMore, state.isLoadingMore, state.loadMoreFailed) {
-        if ((followedOnly || categoryFilter != null) && (!followedOnly || followedSet.isNotEmpty()) && visibleNews.size < 10 && state.canLoadMore &&
+    androidx.compose.runtime.LaunchedEffect(followedOnly, categoryFilter, mediaFilter, followedSet, state.allNews.size, state.canLoadMore, state.isLoadingMore, state.loadMoreFailed) {
+        if ((followedOnly || categoryFilter != null || mediaFilter != null) && (!followedOnly || followedSet.isNotEmpty()) && visibleNews.size < 10 && state.canLoadMore &&
             !state.isLoadingMore && !state.loadMoreFailed && !state.isLoading && state.allNews.size < 300
         ) viewModel.loadMore()
     }
@@ -171,6 +176,22 @@ fun HomeScreen(
                             imageVector = if (searchOpen) Icons.Default.Close else Icons.Default.Search,
                             contentDescription = if (searchOpen) "إغلاق البحث" else "بحث"
                         )
+                    }
+                    com.momaninews.app.data.model.MediaKind.entries.forEach { kind ->
+                        val on = mediaFilter == kind
+                        IconButton(
+                            onClick = { mediaFilter = if (on) null else kind },
+                            colors = androidx.compose.material3.IconButtonDefaults.iconButtonColors(
+                                containerColor = if (on) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f) else androidx.compose.ui.graphics.Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Text(
+                                text = if (kind == com.momaninews.app.data.model.MediaKind.PHOTOS) "🖼" else "🎬",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.semantics { contentDescription = kind.label }
+                            )
+                        }
                     }
                     IconButton(onClick = onNotificationsClick) {
                         Icon(imageVector = Icons.Default.Notifications, contentDescription = "الإشعارات")
@@ -261,7 +282,14 @@ fun HomeScreen(
                             displayName = user?.displayName,
                             onClick = { if (user == null) onSignInClick() else onComposeClick() }
                         )
-                        if (categoryFilter != null && !followedOnly) {
+                        if (mediaFilter != null) {
+                            com.momaninews.app.ui.components.MessageState(
+                                title = if (mediaFilter == com.momaninews.app.data.model.MediaKind.VIDEOS) "لا أخبار بالفيديو حالياً" else "لا أخبار بالصور حالياً",
+                                message = "تظهر هنا الأخبار التي يتوفر لها ${if (mediaFilter == com.momaninews.app.data.model.MediaKind.VIDEOS) "فيديو" else "صورة"} عند المصدر أو من الناشر.",
+                                actionLabel = "عرض كل الأخبار",
+                                onAction = { mediaFilter = null }
+                            )
+                        } else if (categoryFilter != null && !followedOnly) {
                             com.momaninews.app.ui.components.MessageState(
                                 title = "لا أخبار في هذا التصنيف حالياً",
                                 message = "التصنيف يُحدَّد تلقائياً للأخبار المجلوبة حديثاً فقط.",
