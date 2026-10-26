@@ -95,6 +95,14 @@ class HomeViewModel(
 
     fun refresh() = load(isRefresh = true)
 
+    /** تحديث هادئ لشريط الأخبار والرادار فقط (لا يمسّ القائمة ولا موضع التمرير). الفشل صامت. */
+    fun refreshFeatured() {
+        viewModelScope.launch {
+            val f = try { repository.getStories(com.momaninews.app.data.repository.STORY_POOL) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            if (f != null) _uiState.update { it.copy(featured = f) }
+        }
+    }
+
     private fun load(isRefresh: Boolean) {
         loadJob?.cancel()
         _uiState.update {

@@ -19,7 +19,9 @@ data class AppNotification(
     val dateLabel: String,
     /** إشعار عام للجميع (لا يُعلَّم مقروءاً). */
     val isBroadcast: Boolean,
-    val isUnread: Boolean
+    val isUnread: Boolean,
+    /** وقت الإنشاء بالميلي ثانية (0 = غير معروف). */
+    val createdAtMillis: Long = 0L
 )
 
 object NotificationsParser {
@@ -35,7 +37,8 @@ object NotificationsParser {
                 newsId = if (row.isNull("news_id")) null else row.getInt("news_id"),
                 dateLabel = SupabaseNewsParser.formatDate(if (row.isNull("created_at")) "" else row.optString("created_at", "")),
                 isBroadcast = broadcast,
-                isUnread = !broadcast && row.isNull("read_at")
+                isUnread = !broadcast && row.isNull("read_at"),
+                createdAtMillis = SupabaseNewsParser.parseMillis(if (row.isNull("created_at")) "" else row.optString("created_at", ""))
             )
         }
     }

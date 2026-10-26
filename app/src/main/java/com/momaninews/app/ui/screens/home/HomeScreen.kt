@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.momaninews.app.data.model.Regions
 import com.momaninews.app.ui.components.ActiveAdsSection
@@ -133,6 +134,12 @@ fun HomeScreen(
         com.momaninews.app.ui.components.TickerLogic.eligible((state.featured + state.allNews).distinctBy { it.id }, tickerNow)
     }
     val unreadCount = com.momaninews.app.ui.components.TickerLogic.unreadCount(tickerItems, readIds.toSet())
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            while (true) { kotlinx.coroutines.delay(180_000); viewModel.refreshFeatured() }
+        }
+    }
     val openNews: (Int) -> Unit = { id -> com.momaninews.app.data.settings.ReadStore.markRead(id); onNewsClick(id) }
 
     ModalNavigationDrawer(
@@ -167,7 +174,7 @@ fun HomeScreen(
         bottomBar = {
             androidx.compose.foundation.layout.Column {
                 // شريط الأخبار فوق الإعلان؛ من أحدث الأخبار المحمّلة بغضّ النظر عن التصفية
-                com.momaninews.app.ui.components.NewsTicker(items = tickerItems, read = readIds.toSet(), onNewsClick = openNews)
+                com.momaninews.app.ui.components.NewsTicker(items = tickerItems, read = readIds.toSet(), nowMillis = tickerNow, onNewsClick = openNews)
                 BannerAd()
             }
         },

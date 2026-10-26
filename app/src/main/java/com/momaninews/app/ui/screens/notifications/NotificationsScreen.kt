@@ -42,8 +42,7 @@ fun NotificationsScreen(onBack: () -> Unit, onNewsClick: (Int) -> Unit, onSignIn
         error = false
         if (repo == null || user == null) return@LaunchedEffect
         try {
-            list = repo.list()
-            repo.markPersonalRead() // بعد العرض: تبقى علامة «جديد» ظاهرة في هذه الزيارة فقط
+            // لا نعلّم شيئاً مقروءاً تلقائياً: المستخدم يقرّر (فتح الإشعار أو الأزرار)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -59,11 +58,46 @@ fun NotificationsScreen(onBack: () -> Unit, onNewsClick: (Int) -> Unit, onSignIn
                 error -> MessageState("تعذر تحميل الإشعارات", "تحقق من الاتصال وحاول لاحقاً.")
                 list == null -> Text("جارٍ التحميل…", modifier = Modifier.padding(16.dp))
                 list!!.isEmpty() -> MessageState("لا توجد إشعارات", "ستظهر هنا إشعارات الأخبار والتوثيق.")
-                else -> LazyColumn(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(list!!, key = { it.id }) { n -> NotificationCard(n, onNewsClick) }
+                else -> {
+                    val readIds by com.momaninews.app.data.notifications.NotifReadStore.read.collectAsStateWithLifecycle()
+                    val unreadIds by com.momaninews.app.data.notifications.NotifReadStore.unread.collectAsStateWithLifecycle()
+                    val now = remember(list) { System.currentTimeMillis() }
+                    val states = list!!.associate { it.id to com.momaninews.app.data.notifications.NotifReadLogic.isUnread(it, readIds.toSet(), unreadIds.toSet(), now) }
+                    val unreadCount = states.values.count { it }
+                    Column(Modifier.fillMaxSize()) {
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(
+                                if (unreadCount > 0) "$unreadCount غير مقروء" else "كل الإشعارات مقروءة",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (unreadCount > 0) androidx.compose.material3.TextButton(onClick = {
+                                com.momaninews.app.data.notifications.NotifReadStore.markAllRead(list!!.map { it.id })
+                            }) { Text("تعليم الكل كمقروء") }
+                        }
+                        LazyColumn(
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(list!!, key = { it.id }) { n ->
+                                NotificationCard(
+                                    n = n,
+                                    unread = states[n.id] == true,
+                                    onOpen = { id ->
+                                        com.momaninews.app.data.notifications.NotifReadStore.markRead(n.id)
+                                        onNewsClick(id)
+                                    },
+                                    onToggle = {
+                                        if (states[n.id] == true) com.momaninews.app.data.notifications.NotifReadStore.markRead(n.id)
+                                        else com.momaninews.app.data.notifications.NotifReadStore.markUnread(n.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -71,26 +105,27 @@ fun NotificationsScreen(onBack: () -> Unit, onNewsClick: (Int) -> Unit, onSignIn
 }
 
 @Composable
-private fun NotificationCard(n: AppNotification, onNewsClick: (Int) -> Unit) {
+private fun NotificationCard(n: AppNotification, unread: Boolean, onOpen: (Int) -> Unit, onToggle: () -> Unit) {
     val target = n.newsId
     Surface(
-        modifier = Modifier.fillMaxWidth().let { if (target != null) it.clickable { onNewsClick(target) } else it },
+        modifier = Modifier.fillMaxWidth().let { if (target != null) it.clickable { onOpen(target) } else it.clickable { if (unread) onToggle() } },
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(if (n.isUnread) 2.dp else 1.dp, if (n.isUnread) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+        color = if (unread) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(if (unread) 2.dp else 1.dp, if (unread) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = (if (n.isUnread) "جديد • " else "") + n.title,
+                text = (if (unread) "● " else "") + n.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = if (n.isUnread) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (n.body.isNotEmpty()) {
                 Text(n.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
-            if (n.dateLabel.isNotEmpty()) {
-                Text(n.dateLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(n.dateLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = onToggle) { Text(if (unread) "تعليم كمقروء" else "تعليم كغير مقروء") }
             }
         }
     }

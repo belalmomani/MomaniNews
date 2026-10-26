@@ -97,6 +97,7 @@ private val TickerSpeed = 36.dp   // معتدلة ومريحة للقراءة (�
 fun NewsTicker(
     items: List<NewsItem>,
     read: Set<Int>,
+    nowMillis: Long,
     onNewsClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -121,12 +122,16 @@ fun NewsTicker(
     }
 
     val hasUrgent = items.any { TickerLogic.isUrgent(it) }
+    val blips = remember(items, read, nowMillis) { RadarLogic.blips(items, read, nowMillis) }
+    var radarOpen by rememberSaveable { mutableStateOf(false) }
+    if (radarOpen) RadarDialog(blips, nowMillis, onOpen = { radarOpen = false; onNewsClick(it) }, onDismiss = { radarOpen = false })
     Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             modifier = Modifier.heightIn(min = 34.dp).padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            MiniRadar(blips, animate = !(paused || reduceMotion), onClick = { radarOpen = true })
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(6.dp))
                     .background(if (hasUrgent) UrgentRed else MaterialTheme.colorScheme.primary)
