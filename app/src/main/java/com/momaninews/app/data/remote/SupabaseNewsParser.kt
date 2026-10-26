@@ -43,7 +43,8 @@ object SupabaseNewsParser {
             imageUrl = httpsOrNull(text(obj, "image_url")),
             videoUrl = httpsOrNull(text(obj, "video_url")),
             sourceUrl = httpsOrNull(text(obj, "original_url")),
-            category = com.momaninews.app.data.model.NewsCategories.of(text(obj, "category").ifEmpty { null })?.wire
+            category = com.momaninews.app.data.model.NewsCategories.of(text(obj, "category").ifEmpty { null })?.wire,
+            publishedAtMillis = parseMillis(text(obj, "published_at"))
         )
     }
 
@@ -52,6 +53,10 @@ object SupabaseNewsParser {
 
     private fun text(obj: JSONObject, key: String): String =
         if (obj.isNull(key)) "" else obj.optString(key, "")
+
+    /** وقت ISO-8601 → ميلي ثانية؛ 0 إن كان فارغاً أو تالفاً. */
+    fun parseMillis(iso: String): Long =
+        if (iso.isEmpty()) 0L else try { OffsetDateTime.parse(iso).toInstant().toEpochMilli() } catch (e: DateTimeParseException) { 0L }
 
     fun formatDate(iso: String): String {
         if (iso.isEmpty()) return ""

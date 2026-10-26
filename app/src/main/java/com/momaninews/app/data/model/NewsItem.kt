@@ -32,7 +32,9 @@ data class NewsItem(
     /** الرابط الأصلي للخبر عند المصدر (للأخبار المجلوبة). https فقط. */
     val sourceUrl: String? = null,
     /** تصنيف الجالب (death/congrats/...)؛ null = غير مصنّف. */
-    val category: String? = null
+    val category: String? = null,
+    /** وقت النشر بالميلي ثانية (UTC)؛ 0 = غير معروف. يُستخدم لإخفاء الأخبار القديمة من شريط الأخبار. */
+    val publishedAtMillis: Long = 0L
 )
 
 /** تصفية الأخبار بحسب الوسائط: صور أو فيديو. null = كل الأخبار. */

@@ -124,6 +124,17 @@ fun HomeScreen(
     }
     val errorMessage = state.errorMessage
 
+    // شريط الأخبار وعدّاد الجرس: الوقت يتجدد كل دقيقة فتختفي الأخبار القديمة تلقائياً
+    val readIds by com.momaninews.app.data.settings.ReadStore.read.collectAsStateWithLifecycle()
+    val tickerNow by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+        while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() }
+    }
+    val tickerItems = remember(state.featured, state.allNews, tickerNow) {
+        com.momaninews.app.ui.components.TickerLogic.eligible((state.featured + state.allNews).distinctBy { it.id }, tickerNow)
+    }
+    val unreadCount = com.momaninews.app.ui.components.TickerLogic.unreadCount(tickerItems, readIds.toSet())
+    val openNews: (Int) -> Unit = { id -> com.momaninews.app.data.settings.ReadStore.markRead(id); onNewsClick(id) }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -156,7 +167,7 @@ fun HomeScreen(
         bottomBar = {
             androidx.compose.foundation.layout.Column {
                 // شريط الأخبار فوق الإعلان؛ من أحدث الأخبار المحمّلة بغضّ النظر عن التصفية
-                com.momaninews.app.ui.components.NewsTicker(items = state.featured.ifEmpty { state.allNews.take(15) })
+                com.momaninews.app.ui.components.NewsTicker(items = tickerItems, read = readIds.toSet(), onNewsClick = openNews)
                 BannerAd()
             }
         },
@@ -203,7 +214,13 @@ fun HomeScreen(
                         }
                     }
                     IconButton(onClick = onNotificationsClick) {
-                        Icon(imageVector = Icons.Default.Notifications, contentDescription = "الإشعارات")
+                        androidx.compose.material3.BadgedBox(badge = {
+                            com.momaninews.app.ui.components.TickerLogic.badgeText(unreadCount)?.let { t ->
+                                androidx.compose.material3.Badge { Text(t) }
+                            }
+                        }) {
+                            Icon(imageVector = Icons.Default.Notifications, contentDescription = if (unreadCount > 0) "الإشعارات، $unreadCount أخبار جديدة" else "الإشعارات")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -365,7 +382,7 @@ fun HomeScreen(
                                 }
                                 com.momaninews.app.ui.components.FeaturedStrip(
                                     items = stories,
-                                    onNewsClick = onNewsClick,
+                                    onNewsClick = openNews,
                                     onCreateClick = { if (user == null) onSignInClick() else onComposeClick() }
                                 )
                             }
@@ -378,7 +395,7 @@ fun HomeScreen(
                             items(visibleNews, key = { it.id }) { news ->
                                 NewsCard(
                                     news = news,
-                                    onClick = { onNewsClick(news.id) },
+                                    onClick = { openNews(news.id) },
                                     reactions = reactionMap[news.id]
                                 )
                             }

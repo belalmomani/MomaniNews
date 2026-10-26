@@ -11,6 +11,7 @@ class MomaniNewsApp : Application() {
         SettingsStore.init(this)
         com.momaninews.app.data.settings.FollowStore.init(this)
         com.momaninews.app.data.settings.PostPrefs.init(this)
+        com.momaninews.app.data.settings.ReadStore.init(this)
         AuthRepositories.init(this)
         PushNotifier.createChannel(this)
         PushNotifier.schedule(this)

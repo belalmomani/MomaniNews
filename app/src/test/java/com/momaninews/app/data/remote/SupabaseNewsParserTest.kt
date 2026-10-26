@@ -83,4 +83,11 @@ class SupabaseNewsParserTest {
         assertEquals(2, com.momaninews.app.data.model.NewsCategories.filter(items, null).size)
         assertEquals(7, com.momaninews.app.data.model.NewsCategories.all.size)
     }
+
+    @Test
+    fun parseMillis_validEmptyAndBroken() {
+        assertEquals(1_700_000_000_000L, SupabaseNewsParser.parseMillis("2023-11-14T22:13:20+00:00"))
+        assertEquals(0L, SupabaseNewsParser.parseMillis(""))
+        assertEquals(0L, SupabaseNewsParser.parseMillis("غير تاريخ"))
+    }
 }

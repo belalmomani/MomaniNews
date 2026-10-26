@@ -13,6 +13,8 @@ object AppIcons {
             .addPath(PathParser().parsePathString(pathData).toNodes(), fill = SolidColor(Color.Black))
             .build()
 
+    val Pause: ImageVector by lazy { icon("Pause", "M6,19h4V5H6v14zM14,5v14h4V5h-4z") }
+
     val Photo: ImageVector by lazy {
         icon("Photo", "M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z")
     }
