@@ -5,6 +5,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,7 +41,7 @@ import com.momaninews.app.data.model.Regions
 import com.momaninews.app.data.model.User
 import com.momaninews.app.data.model.VerificationStatus
 
-enum class DrawerAction { HOME, REGION, NOTIFICATIONS, SAVED, MY_POSTS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
+enum class DrawerAction { HOME, REGION, PROFILE, NOTIFICATIONS, SAVED, MY_POSTS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
 
 data class DrawerEntry(val action: DrawerAction, val label: String, val regionId: String? = null)
 
@@ -50,7 +65,39 @@ object DrawerLogic {
         add(if (user == null) DrawerEntry(DrawerAction.SIGN_IN, "تسجيل الدخول") else DrawerEntry(DrawerAction.SIGN_OUT, "تسجيل الخروج"))
     }
 
+    /** تقسيم القائمة لأقسام العرض: اختصارات (الرئيسية والمناطق)، أدواتي، المزيد (قابل للطيّ)، وزر الدخول/الخروج. */
+    data class Sections(
+        val shortcuts: List<DrawerEntry>,
+        val main: List<DrawerEntry>,
+        val more: List<DrawerEntry>,
+        val footer: DrawerEntry?
+    )
+
+    fun sections(user: User?): Sections {
+        val all = entries(user)
+        fun pick(vararg a: DrawerAction) = all.filter { it.action in a }
+        return Sections(
+            shortcuts = pick(DrawerAction.HOME, DrawerAction.REGION),
+            main = pick(DrawerAction.SAVED, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST),
+            more = pick(DrawerAction.VERIFICATION, DrawerAction.SETTINGS, DrawerAction.ADMIN),
+            footer = all.firstOrNull { it.action == DrawerAction.SIGN_IN || it.action == DrawerAction.SIGN_OUT }
+        )
+    }
+
     fun initial(name: String): String = name.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "م"
+}
+
+private fun iconFor(a: DrawerAction): ImageVector = when (a) {
+    DrawerAction.SAVED -> Icons.Default.Star
+    DrawerAction.NOTIFICATIONS -> Icons.Default.Notifications
+    DrawerAction.MY_POSTS -> Icons.Default.Edit
+    DrawerAction.AD_REQUEST -> Icons.Default.Info
+    DrawerAction.VERIFICATION -> Icons.Default.CheckCircle
+    DrawerAction.SETTINGS -> Icons.Default.Settings
+    DrawerAction.ADMIN -> Icons.Default.Lock
+    DrawerAction.SIGN_IN -> Icons.Default.Person
+    DrawerAction.SIGN_OUT -> Icons.Default.Close
+    else -> Icons.Default.Home
 }
 
 @Composable
@@ -59,60 +106,151 @@ fun HomeDrawerContent(
     selectedRegionId: String?,
     onEntry: (DrawerEntry) -> Unit
 ) {
+    val sec = DrawerLogic.sections(user)
+    var moreOpen by rememberSaveable { mutableStateOf(false) }
     ModalDrawerSheet {
-        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-            // رأس الحساب (كصفحة الملف في فيسبوك)
-            Row(
-                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer).padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
+        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            ProfileCard(user) { onEntry(DrawerEntry(DrawerAction.PROFILE, "الحساب")) }
+
+            SectionLabel("اختصاراتك")
+            // بلاطات بعمودين: الرئيسية ثم المناطق
+            sec.shortcuts.chunked(2).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        DrawerLogic.initial(user?.displayName ?: ""),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    row.forEach { e ->
+                        val selected = (e.action == DrawerAction.HOME && selectedRegionId == null) ||
+                            (e.action == DrawerAction.REGION && e.regionId == selectedRegionId)
+                        ShortcutTile(e, selected, Modifier.weight(1f)) { onEntry(e) }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        user?.displayName ?: "زائر",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1
-                    )
-                    Text(
-                        user?.email ?: "سجّل الدخول للتعليق والتصويت",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1
+            }
+
+            if (sec.main.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                sec.main.forEach { e ->
+                    NavigationDrawerItem(
+                        icon = { Icon(iconFor(e.action), contentDescription = null) },
+                        label = { Text(e.label) },
+                        selected = false,
+                        onClick = { onEntry(e) },
+                        modifier = Modifier.padding(horizontal = 12.dp)
                     )
                 }
             }
 
-            val entries = DrawerLogic.entries(user)
-            entries.forEachIndexed { i, e ->
-                // فواصل بين الأقسام: بعد الرئيسية، وبعد المناطق
-                if (e.action == DrawerAction.REGION && entries[i - 1].action == DrawerAction.HOME) {
-                    SectionLabel("المناطق")
+            if (sec.more.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                // مجموعة قابلة للطيّ كـ«الإعدادات والخصوصية» في فيسبوك
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { moreOpen = !moreOpen }.padding(horizontal = 28.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("الإعدادات والمزيد", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Icon(if (moreOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = if (moreOpen) "طيّ" else "توسيع")
                 }
-                if (e.action != DrawerAction.REGION && e.action != DrawerAction.HOME && entries[i - 1].action == DrawerAction.REGION) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                if (moreOpen) sec.more.forEach { e ->
+                    NavigationDrawerItem(
+                        icon = { Icon(iconFor(e.action), contentDescription = null) },
+                        label = { Text(e.label) },
+                        selected = false,
+                        onClick = { onEntry(e) },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
                 }
+            }
+
+            sec.footer?.let { e ->
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
                 NavigationDrawerItem(
-                    label = { Text(e.label) },
-                    selected = (e.action == DrawerAction.HOME && selectedRegionId == null) ||
-                        (e.action == DrawerAction.REGION && e.regionId == selectedRegionId),
+                    icon = { Icon(iconFor(e.action), contentDescription = null) },
+                    label = { Text(e.label, color = if (e.action == DrawerAction.SIGN_OUT) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
+                    selected = false,
                     onClick = { onEntry(e) },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
-            Box(modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+/** بطاقة الحساب أعلى القائمة: تفتح صفحة الحساب (أو تسجيل الدخول للزائر). */
+@Composable
+private fun ProfileCard(user: User?, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(12.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    DrawerLogic.initial(user?.displayName ?: ""),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    user?.displayName ?: "زائر",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    user?.email ?: "سجّل الدخول للتعليق والتصويت",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+
+@Composable
+private fun ShortcutTile(e: DrawerEntry, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Surface(
+        modifier = modifier.clip(shape).clickable(onClick = onClick)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f), shape),
+        shape = shape,
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(30.dp).clip(CircleShape)
+                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                if (e.action == DrawerAction.HOME) {
+                    Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp),
+                        tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
+                } else {
+                    Text(DrawerLogic.initial(e.label), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+            Text(e.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -121,8 +259,8 @@ fun HomeDrawerContent(
 private fun SectionLabel(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 12.dp, bottom = 4.dp)
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 6.dp)
     )
 }

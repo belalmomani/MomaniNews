@@ -39,4 +39,26 @@ class DrawerLogicTest {
         assertEquals("أ", DrawerLogic.initial(" أحمد"))
         assertEquals("م", DrawerLogic.initial(""))
     }
+
+    @Test fun sections_guest() {
+        val s = DrawerLogic.sections(null)
+        assertEquals(5, s.shortcuts.size)                       // الرئيسية + 4 مناطق
+        assertEquals(listOf(DrawerAction.SAVED), s.main.map { it.action })
+        assertEquals(listOf(DrawerAction.SETTINGS), s.more.map { it.action })
+        assertEquals(DrawerAction.SIGN_IN, s.footer?.action)
+    }
+
+    @Test fun sections_adminUserGetsToolsAndAdminUnderMore() {
+        val s = DrawerLogic.sections(user(admin = true))
+        assertEquals(listOf(DrawerAction.SAVED, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST), s.main.map { it.action })
+        assertEquals(listOf(DrawerAction.VERIFICATION, DrawerAction.SETTINGS, DrawerAction.ADMIN), s.more.map { it.action })
+        assertEquals(DrawerAction.SIGN_OUT, s.footer?.action)
+    }
+
+    @Test fun sections_coverEveryEntryExactlyOnce() {
+        val u = user(admin = true)
+        val s = DrawerLogic.sections(u)
+        val all = s.shortcuts + s.main + s.more + listOfNotNull(s.footer)
+        assertEquals(DrawerLogic.entries(u).map { it.action to it.regionId }.sortedBy { it.toString() }, all.map { it.action to it.regionId }.sortedBy { it.toString() })
+    }
 }

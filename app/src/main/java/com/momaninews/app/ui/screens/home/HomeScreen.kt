@@ -135,6 +135,7 @@ fun HomeScreen(
                     when (e.action) {
                         DrawerAction.HOME -> viewModel.onRegionSelected(null)
                         DrawerAction.REGION -> viewModel.onRegionSelected(e.regionId)
+                        DrawerAction.PROFILE -> if (user == null) onSignInClick() else onProfileClick()
                         DrawerAction.NOTIFICATIONS -> onNotificationsClick()
                         DrawerAction.MY_POSTS -> onMyPostsClick()
                         DrawerAction.SAVED -> onSavedClick()
