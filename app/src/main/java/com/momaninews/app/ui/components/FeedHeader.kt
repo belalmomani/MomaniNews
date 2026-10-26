@@ -36,14 +36,16 @@ import com.momaninews.app.ui.screens.home.DrawerLogic
 
 /** شريط «بم تفكر؟»: أفاتار المستخدم + حقل على شكل حبة + أيقونة المعرض، يفتح شاشة النشر. */
 @Composable
-fun ComposerEntry(displayName: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ComposerEntry(displayName: String?, onClick: () -> Unit, modifier: Modifier = Modifier, onAvatarClick: (() -> Unit)? = null) {
     Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Avatar(DrawerLogic.initial(displayName ?: ""), 40)
+            Box(modifier = Modifier.clip(CircleShape).let { if (onAvatarClick != null) it.clickable(onClick = onAvatarClick) else it }) {
+                Avatar(DrawerLogic.initial(displayName ?: ""), 40)
+            }
             Box(
                 modifier = Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(21.dp))
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(21.dp))
@@ -52,7 +54,11 @@ fun ComposerEntry(displayName: String?, onClick: () -> Unit, modifier: Modifier 
             ) {
                 Text("بم تفكر؟ شارك خبراً من منطقتك", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text("🖼️", style = MaterialTheme.typography.titleLarge, modifier = Modifier.clickable(onClick = onClick))
+            androidx.compose.material3.Icon(
+                imageVector = AppIcons.Photo, contentDescription = "إضافة صورة",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp).clickable(onClick = onClick)
+            )
         }
     }
 }

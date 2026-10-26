@@ -28,6 +28,7 @@ grant select on public.news_reactions to authenticated;
 grant insert (news_id, reaction) on public.news_reactions to authenticated;
 grant update (reaction)          on public.news_reactions to authenticated;
 grant delete                     on public.news_reactions to authenticated;
+revoke all on public.news_reaction_counts from anon, authenticated;
 grant select on public.news_reaction_counts to anon, authenticated;
 
 drop policy if exists reactions_read_own on public.news_reactions;

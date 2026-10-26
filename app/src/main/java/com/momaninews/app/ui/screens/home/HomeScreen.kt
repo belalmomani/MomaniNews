@@ -163,8 +163,10 @@ fun HomeScreen(
                 title = {
                     Text(
                         text = "المومني نيوز",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 },
                 actions = {
@@ -186,18 +188,15 @@ fun HomeScreen(
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Text(
-                                text = if (kind == com.momaninews.app.data.model.MediaKind.PHOTOS) "🖼" else "🎬",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.semantics { contentDescription = kind.label }
+                            Icon(
+                                imageVector = if (kind == com.momaninews.app.data.model.MediaKind.PHOTOS) com.momaninews.app.ui.components.AppIcons.Photo
+                                else com.momaninews.app.ui.components.AppIcons.Video,
+                                contentDescription = kind.label
                             )
                         }
                     }
                     IconButton(onClick = onNotificationsClick) {
                         Icon(imageVector = Icons.Default.Notifications, contentDescription = "الإشعارات")
-                    }
-                    IconButton(onClick = onProfileClick) {
-                        Icon(imageVector = Icons.Default.Person, contentDescription = "الحساب")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -224,11 +223,29 @@ fun HomeScreen(
                 selectedRegionId = state.selectedRegionId,
                 onRegionSelected = viewModel::onRegionSelected
             )
+            var sortMenuOpen by remember { mutableStateOf(false) }
             androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item(key = "sort-chip") {
+                    Box {
+                        FilterChip(
+                            selected = state.sort != com.momaninews.app.data.repository.NewsSort.NEWEST,
+                            onClick = { sortMenuOpen = true },
+                            label = { Text("ترتيب: ${state.sort.label} ▾") }
+                        )
+                        androidx.compose.material3.DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                            com.momaninews.app.data.repository.NewsSort.entries.forEach { option ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(option.label, fontWeight = if (state.sort == option) FontWeight.Bold else FontWeight.Normal) },
+                                    onClick = { viewModel.onSortSelected(option); sortMenuOpen = false }
+                                )
+                            }
+                        }
+                    }
+                }
                 item(key = "followed-chip") {
                     FilterChip(
                         selected = followedOnly,
@@ -240,20 +257,6 @@ fun HomeScreen(
                         }
                     )
                 }
-                items(com.momaninews.app.data.repository.NewsSort.entries.toList()) { option ->
-                    FilterChip(
-                        selected = state.sort == option,
-                        onClick = { viewModel.onSortSelected(option) },
-                        label = { Text(option.label) }
-                    )
-                }
-            }
-
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 items(com.momaninews.app.data.model.NewsCategories.all) { c ->
                     FilterChip(
                         selected = categoryFilter == c.wire,
@@ -262,6 +265,24 @@ fun HomeScreen(
                     )
                 }
             }
+
+            // شريط التصفية النشطة: يُظهر عدد النتائج وزر إزالة الكل (ليعرف المستخدم لماذا القائمة قصيرة)
+            val activeFilters = com.momaninews.app.ui.screens.home.HomeFilters.activeCount(followedOnly, categoryFilter, mediaFilter)
+            if (activeFilters > 0) {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${visibleNews.size} خبر • تصفية نشطة ($activeFilters)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.TextButton(onClick = { followedOnly = false; categoryFilter = null; mediaFilter = null }) { Text("إزالة الكل") }
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
 
             Box(
                 modifier = Modifier
@@ -280,7 +301,8 @@ fun HomeScreen(
                         // حتى بلا أخبار يستطيع المستخدم نشر أول خبر
                         com.momaninews.app.ui.components.ComposerEntry(
                             displayName = user?.displayName,
-                            onClick = { if (user == null) onSignInClick() else onComposeClick() }
+                            onClick = { if (user == null) onSignInClick() else onComposeClick() },
+                            onAvatarClick = { if (user == null) onSignInClick() else onProfileClick() }
                         )
                         if (mediaFilter != null) {
                             com.momaninews.app.ui.components.MessageState(
@@ -322,7 +344,8 @@ fun HomeScreen(
                             item(key = "composer") {
                                 com.momaninews.app.ui.components.ComposerEntry(
                                     displayName = user?.displayName,
-                                    onClick = { if (user == null) onSignInClick() else onComposeClick() }
+                                    onClick = { if (user == null) onSignInClick() else onComposeClick() },
+                                    onAvatarClick = { if (user == null) onSignInClick() else onProfileClick() }
                                 )
                             }
                             item(key = "featured") {
@@ -339,7 +362,7 @@ fun HomeScreen(
                                     onCreateClick = { if (user == null) onSignInClick() else onComposeClick() }
                                 )
                             }
-                            item(key = "demo-banner") {
+                            if (visibleNews.any { it.isSample }) item(key = "demo-banner") {
                                 Box(Modifier.padding(horizontal = 16.dp)) { DemoBanner() }
                             }
                             item(key = "active-ads") {
