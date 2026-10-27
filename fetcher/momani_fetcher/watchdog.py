@@ -12,14 +12,14 @@ BAD_STREAK = 3                       # عدد التشغيلات المتتال�
 
 
 def _bad(run: dict) -> str | None:
-    """سبب كون التشغيل «سيئاً»، أو None. سيئ = انتهى بخطأ، أو كل المصادر فشلت، أو لم يُفحص أي عنصر."""
-    if run.get("error_summary"):
-        return "خطأ: " + str(run["error_summary"])[:120]
+    """سبب كون التشغيل «سيئاً»، أو None. سيئ = كل المصادر فشلت، أو لم يُفحص أي عنصر. فشل بعض المصادر مع فحص عناصر ليس عطلاً."""
+    # error_summary يُملأ عند فشل أي مصدر (حتى لو نجح الباقي)، فلا يُعدّ وحده عطلاً
+    err = ("خطأ: " + str(run["error_summary"])[:120]) if run.get("error_summary") else ""
     total, failed = run.get("sources_total") or 0, run.get("sources_failed") or 0
     if total and failed >= total:
         return f"فشلت كل المصادر ({failed}/{total})"
     if (run.get("items_seen") or 0) == 0:
-        return "لم يُفحص أي عنصر"
+        return "لم يُفحص أي عنصر" + (" | " + err if err else "")
     return None
 
 

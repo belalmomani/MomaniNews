@@ -30,13 +30,20 @@ jobs:
         run: |
           test -n "$KS" || { echo "RELEASE_KEYSTORE_BASE64 secret is missing"; exit 1; }
           echo "$KS" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Compute version
+        # versionCode = دقائق منذ 1/1/2026 UTC: يزيد دائماً ويتفق مع build-apk وpublish-release (يشترطه Google Play ومقارن التحديث).
+        run: |
+          CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          echo "CODE=$CODE" >> "$GITHUB_ENV"
+          echo "NAME=0.3.$CODE" >> "$GITHUB_ENV"
+
       - name: Build
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew testReleaseUnitTest bundleRelease assembleRelease "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
+        run: ./gradlew testReleaseUnitTest bundleRelease assembleRelease "-PversionCode=$CODE" "-PversionName=$NAME" "-PprivacyUrl=${{ vars.PRIVACY_URL }}" --stacktrace
       - name: Remove keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release.keystore"

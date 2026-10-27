@@ -82,12 +82,17 @@ class WatchdogTests(unittest.TestCase):
         self.assertTrue(any("آخر تشغيل جلب قبل 9 ساعة" in x for x in p))
 
     def test_three_bad_runs_in_a_row(self):
-        p = watchdog.evaluate([runrow(60, err="boom"), runrow(240, failed=10), runrow(420, seen=0)], NOW)
+        p = watchdog.evaluate([runrow(60, err="boom", seen=0), runrow(240, failed=10), runrow(420, seen=0)], NOW)
         self.assertEqual(len(p), 1)
         self.assertIn("آخر 3 تشغيلات سيئة", p[0])
 
+    def test_some_sources_failing_is_not_an_outage(self):
+        # فشل بعض المصادر (error_summary) مع فحص عناصر فعلاً ليس عطلاً
+        rows = [runrow(60, failed=3, err="s1: x"), runrow(240, failed=3, err="s1: x"), runrow(420, failed=3, err="s1: x")]
+        self.assertEqual(watchdog.evaluate(rows, NOW), [])
+
     def test_two_bad_runs_not_enough(self):
-        self.assertEqual(watchdog.evaluate([runrow(60, err="boom"), runrow(240, failed=10), runrow(420)], NOW), [])
+        self.assertEqual(watchdog.evaluate([runrow(60, err="boom", seen=0), runrow(240, failed=10), runrow(420)], NOW), [])
 
     def test_no_runs_at_all(self):
         self.assertEqual(watchdog.evaluate([], NOW), ["لا يوجد أي تشغيل جلب مسجّل"])

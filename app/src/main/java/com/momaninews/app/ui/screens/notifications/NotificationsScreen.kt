@@ -35,18 +35,23 @@ fun NotificationsScreen(onBack: () -> Unit, onNewsClick: (Int) -> Unit, onSignIn
     val repo = NotificationsRepositories.default
     val user by AuthRepositories.default.currentUser.collectAsStateWithLifecycle()
     var list by remember { mutableStateOf<List<AppNotification>?>(null) }
-    var error by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
 
-    LaunchedEffect(user?.id) {
+    LaunchedEffect(user?.id, attempt) {
         list = null
-        error = false
+        error = null
         if (repo == null || user == null) return@LaunchedEffect
         try {
+            // مهلة صريحة: لا نبقى على «جارٍ التحميل» إلى الأبد
+            val result = kotlinx.coroutines.withTimeoutOrNull(25_000L) { repo.list() }
+            if (result == null) error = "انتهت المهلة (25 ثانية) دون رد."
+            else list = result
             // لا نعلّم شيئاً مقروءاً تلقائياً: المستخدم يقرّر (فتح الإشعار أو الأزرار)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            error = true
+        } catch (e: Throwable) {
+            error = (e::class.java.simpleName + ": " + (e.message ?: "")).take(160)
         }
     }
 
@@ -55,7 +60,7 @@ fun NotificationsScreen(onBack: () -> Unit, onNewsClick: (Int) -> Unit, onSignIn
             when {
                 repo == null -> MessageState("غير متاح في الوضع التجريبي", "الإشعارات تحتاج تسجيل الدخول بحساب Google الحقيقي.")
                 user == null -> MessageState("لم تسجّل الدخول", "سجّل الدخول لتصلك الإشعارات.", actionLabel = "تسجيل الدخول", onAction = onSignInClick)
-                error -> MessageState("تعذر تحميل الإشعارات", "تحقق من الاتصال وحاول لاحقاً.")
+                error != null -> MessageState("تعذر تحميل الإشعارات", "السبب: $error", actionLabel = "إعادة المحاولة", onAction = { attempt++ })
                 list == null -> Text("جارٍ التحميل…", modifier = Modifier.padding(16.dp))
                 list!!.isEmpty() -> MessageState("لا توجد إشعارات", "ستظهر هنا إشعارات الأخبار والتوثيق.")
                 else -> {

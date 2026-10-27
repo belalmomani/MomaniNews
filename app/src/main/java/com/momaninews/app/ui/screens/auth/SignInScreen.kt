@@ -16,10 +16,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,34 @@ fun SignInScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // يبدأ الدخول بحساب Google مباشرة (نافذة اختيار الحساب الأصلية) دون ضغطة إضافية.
+    fun startSignIn() {
+        loading = true
+        error = null
+        scope.launch {
+            try {
+                auth.signIn(context)
+                onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SignInCancelledException) {
+                loading = false // أغلق المستخدم النافذة: لا رسالة خطأ؛ يبقى الزر لإعادة المحاولة
+            } catch (e: Exception) {
+                error = "تعذر تسجيل الدخول. حاول مرة أخرى."
+                loading = false
+            }
+        }
+    }
+
+    // مرة واحدة فقط لكل فتح للشاشة (لا يتكرر بالتدوير)، وليس في الوضع التجريبي ولا إن كان المستخدم مسجلاً أصلاً
+    var autoTried by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!autoTried && !auth.isDemo && auth.currentUser.value == null) {
+            autoTried = true
+            startSignIn()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -89,23 +119,7 @@ fun SignInScreen(
             )
 
             Button(
-                onClick = {
-                    loading = true
-                    error = null
-                    scope.launch {
-                        try {
-                            auth.signIn(context)
-                            onDone()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: SignInCancelledException) {
-                            loading = false // أغلق المستخدم النافذة: لا رسالة خطأ
-                        } catch (e: Exception) {
-                            error = "تعذر تسجيل الدخول. حاول مرة أخرى."
-                            loading = false
-                        }
-                    }
-                },
+                onClick = { startSignIn() },
                 enabled = !loading
             ) {
                 Text(
