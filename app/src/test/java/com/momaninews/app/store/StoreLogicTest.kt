@@ -134,4 +134,22 @@ class StoreLogicTest {
             StoreLogic.readmeImages(md, "o/r")
         )
     }
+
+    @Test fun metaUrl_findsAppJsonOnRawHostOnly() {
+        val ok = """[{"type":"file","name":"icon.png","download_url":"https://raw.githubusercontent.com/o/r/main/store/icon.png"},
+            {"type":"file","name":"App.JSON","download_url":"https://raw.githubusercontent.com/o/r/main/store/App.JSON"}]"""
+        assertEquals("https://raw.githubusercontent.com/o/r/main/store/App.JSON", StoreLogic.metaUrl(ok))
+        assertNull(StoreLogic.metaUrl("""[{"type":"file","name":"app.json","download_url":"https://evil.example/app.json"}]"""))
+        assertNull(StoreLogic.metaUrl("""[{"type":"dir","name":"app.json","download_url":null}]"""))
+        assertNull(StoreLogic.metaUrl("not json"))
+    }
+
+    @Test fun parseMeta_fieldsOptionalAndValidated() {
+        val m = StoreLogic.parseMeta("""{"title":"  اسمي ","description":"شرح التطبيق","category":"NEWS"}""")
+        assertEquals("اسمي", m.title); assertEquals("شرح التطبيق", m.description); assertEquals("news", m.category)
+        val e = StoreLogic.parseMeta("""{"category":"bogus","description":"   ","title":null}""")
+        assertNull(e.title); assertNull(e.description); assertNull(e.category)
+        assertNull(StoreLogic.parseMeta("garbage").description)
+        assertEquals(2000, StoreLogic.parseMeta("""{"description":"${"x".repeat(5000)}"}""").description!!.length)
+    }
 }

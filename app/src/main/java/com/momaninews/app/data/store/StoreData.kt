@@ -43,8 +43,13 @@ data class GitHubAppInfo(
     val screenshots: List<String>,
     val apkUrl: String?,
     val versionName: String?,
-    val sizeBytes: Long?
+    val sizeBytes: Long?,
+    /** من store/app.json إن وُجد (اقتراح التصنيف). */
+    val category: String? = null
 )
+
+/** محتوى store/app.json: المكان الوحيد الذي يكتب فيه الإنسان أو أداة (ذكاء اصطناعي مثلاً) شرح التطبيق. */
+data class AppMeta(val title: String?, val description: String?, val category: String?)
 
 /** قواعد نقية قابلة للاختبار (بلا أندرويد). */
 object StoreLogic {
@@ -195,6 +200,28 @@ object StoreLogic {
             abs.takeIf { ext in IMG_EXT && isTrustedImage(it) }
         }.distinct().take(MAX_SHOTS).toList()
 
+    /** رابط ملف store/app.json من محتويات المجلد (raw.githubusercontent.com فقط)، أو null. */
+    fun metaUrl(contentsJson: String): String? {
+        val a = try { JSONArray(contentsJson) } catch (e: Exception) { return null }
+        for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            if (o.optString("type") == "file" && o.optString("name").lowercase() == "app.json") {
+                val u = o.optString("download_url", "")
+                val h = try { URI(u).host?.lowercase() } catch (e: Exception) { null }
+                if (u.startsWith("https://") && h == "raw.githubusercontent.com" && u.length <= 1000) return u
+            }
+        }
+        return null
+    }
+
+    /** يقرأ app.json: {"title","description","category"}؛ كل حقل اختياري. التصنيف يجب أن يكون من القائمة وإلا يُهمل. */
+    fun parseMeta(json: String): AppMeta {
+        val o = try { JSONObject(json) } catch (e: Exception) { return AppMeta(null, null, null) }
+        fun str(k: String, max: Int) = if (o.isNull(k)) null else o.optString(k, "").trim().take(max).ifEmpty { null }
+        val cat = str("category", 20)?.lowercase()?.takeIf { c -> categories.any { it.wire == c } }
+        return AppMeta(str("title", 100), str("description", 2000), cat)
+    }
+
     fun avatarUrl(repo: String): String = "https://github.com/${repo.substringBefore('/')}.png"
 }
 
@@ -271,18 +298,23 @@ object GitHubStoreSync {
         val name = o.optString("name", repo.substringAfter('/'))
         val desc = if (o.isNull("description")) "" else o.optString("description", "").trim().take(2000)
         val rel = getJson("https://api.github.com/repos/$repo/releases/latest")?.let { StoreLogic.parseLatestApk(it, repo) }
-        val media = getJson("https://api.github.com/repos/$repo/contents/store")?.let { StoreLogic.pickMedia(it) } ?: (null to emptyList())
+        val contents = getJson("https://api.github.com/repos/$repo/contents/store")
+        val media = contents?.let { StoreLogic.pickMedia(it) } ?: (null to emptyList())
+        val meta = contents?.let { StoreLogic.metaUrl(it) }?.let { u ->
+            runCatching { getJson(u, "text/plain")?.let { StoreLogic.parseMeta(it) } }.getOrNull()
+        }
         // README: وصف بديل إن لم يكن للمستودع وصف، وصور بديلة إن لم توجد لقطات في store/
-        val readme = if (desc.isBlank() || media.second.isEmpty()) runCatching { getJson("https://api.github.com/repos/$repo/readme", "application/vnd.github.raw+json") }.getOrNull() else null
+        val readme = if ((meta?.description == null && desc.isBlank()) || media.second.isEmpty()) runCatching { getJson("https://api.github.com/repos/$repo/readme", "application/vnd.github.raw+json") }.getOrNull() else null
         GitHubAppInfo(
             repo = repo,
-            title = name.take(100),
-            description = desc.ifBlank { readme?.let { StoreLogic.readmeSummary(it) } ?: "" },
+            title = meta?.title ?: name.take(100),
+            description = meta?.description ?: desc.ifBlank { readme?.let { StoreLogic.readmeSummary(it) } ?: "" },
             iconUrl = media.first ?: StoreLogic.avatarUrl(repo),
             screenshots = media.second.ifEmpty { readme?.let { StoreLogic.readmeImages(it, repo) } ?: emptyList() },
             apkUrl = rel?.first,
             versionName = rel?.third,
-            sizeBytes = rel?.second
+            sizeBytes = rel?.second,
+            category = meta?.category
         )
     }
 }
@@ -326,7 +358,9 @@ class StoreAdminRepository(private val rest: SupabaseRest, private val session: 
     suspend fun addFromGitHub(input: String) {
         val repo = StoreLogic.parseRepo(input) ?: throw IllegalArgumentException("اكتب owner/name أو رابط github.com/owner/name")
         val i = GitHubStoreSync.fetch(repo)
-        write("POST", "store_apps", infoJson(i).put("repo", i.repo).put("title", i.title).put("status", "pending"))
+        val row = infoJson(i).put("repo", i.repo).put("title", i.title).put("status", "pending")
+        if (i.category != null) row.put("category", i.category)
+        write("POST", "store_apps", row)
     }
 
     private fun infoJson(i: GitHubAppInfo) = JSONObject()
@@ -338,7 +372,7 @@ class StoreAdminRepository(private val rest: SupabaseRest, private val session: 
         .put("size_bytes", i.sizeBytes ?: JSONObject.NULL)
 
     /** يحدّث الإصدار والملف والصور من GitHub، ويُبقي الاسم والوصف والتصنيف كما عدّلها المدير. */
-    suspend fun refresh(ref: String, repo: String, currentDescription: String = "") {
+    suspend fun refresh(ref: String, repo: String, currentDescription: String = "", overwriteText: Boolean = false) {
         val i = GitHubStoreSync.fetch(repo)
         val b = JSONObject()
             .put("icon_url", i.iconUrl ?: JSONObject.NULL)
@@ -346,7 +380,14 @@ class StoreAdminRepository(private val rest: SupabaseRest, private val session: 
             .put("apk_url", i.apkUrl ?: JSONObject.NULL)
             .put("version_name", i.versionName ?: JSONObject.NULL)
             .put("size_bytes", i.sizeBytes ?: JSONObject.NULL)
-        if (currentDescription.isBlank() && i.description.isNotBlank()) b.put("description", i.description)   // لا نكتب فوق وصف عدّله المدير
+        if (overwriteText) {
+            // «سحب كل شيء»: store/app.json (أو About/README) يحلّ محل ما في المتجر
+            if (i.title.isNotBlank()) b.put("title", i.title)
+            b.put("description", i.description)
+            if (i.category != null) b.put("category", i.category)
+        } else if (currentDescription.isBlank() && i.description.isNotBlank()) {
+            b.put("description", i.description)   // لا نكتب فوق وصف عدّله المدير
+        }
         write("PATCH", "store_apps?id=eq.${idOf(ref)}", b)
     }
 
