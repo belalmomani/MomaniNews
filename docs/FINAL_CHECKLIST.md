@@ -12,7 +12,7 @@
 3. تأكد أن `gradle/wrapper/gradle-wrapper.jar` موجود (وإلا يولّده الـ workflow).
 
 ## 2) Supabase
-1. SQL Editor ← الصق `MomaniNews-supabase-FINAL.sql` كاملاً ← Run. اقرأ التقرير: لا يجب أن يبقى أي ❌.
+1. SQL Editor ← الصق `MomaniNews-supabase-FINAL2.sql` كاملاً ← Run. اقرأ التقرير: لا يجب أن يبقى أي ❌.
 2. Authentication ← Providers ← Google مفعّل بالسر **الجديد** (بعد التدوير).
 
 ## 3) أسرار GitHub (Settings ← Secrets and variables)
@@ -23,6 +23,9 @@
 ## 4) الأمان (إلزامي قبل النشر العام)
 - دوّر مفتاح `sb_secret` المكشوف في Supabase، وسر Google OAuth المكشوف في Google Cloud، وحدّث الأسرار في GitHub وSupabase.
 - لا تضع ملف حساب خدمة Firebase في المستودع ولا ترسله في المحادثة.
+
+## 4b) متجري
+- شغّل `MomaniNews-supabase-FINAL2.sql` (يضيف جدول `store_apps`)، ثم اتبع `docs/STORE.md` لإضافة التطبيقات واعتمادها.
 
 ## 5) تشغيل أول مرة (Actions، بهذا الترتيب)
 1. **Build Android APK** ← ثبّت على هاتف حقيقي وجرّب (القسم 7).

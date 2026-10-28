@@ -404,6 +404,26 @@ begin
   perform t.chk('blocked_publishers: الأدمن يقرأ', t.sel(uc, au, 'select count(*) from public.blocked_publishers'), '1');
   perform t.chk('blocked_publishers: المستخدم لا يحذف', t.dml(ua, au, 'delete from public.blocked_publishers'), '0');
   perform t.chk('blocked_publishers: الأدمن يحذف', t.dml(uc, au, 'delete from public.blocked_publishers'), '1');
+
+  -- ---------- متجري ----------
+  perform t.chk('store: الأدمن يضيف (معلّق)', t.dml(uc, au, $q$insert into public.store_apps (repo, title) values ('owner/app-one', 'تطبيق ١')$q$), '1');
+  perform t.chk('store: المعلّق لا يراه الزائر', t.sel(null, anon, 'select count(*) from public.store_apps'), '0');
+  perform t.chk('store: المعلّق لا يراه المستخدم', t.sel(ua, au, 'select count(*) from public.store_apps'), '0');
+  perform t.chk('store: الأدمن يرى المعلّق', t.sel(uc, au, 'select count(*) from public.store_apps'), '1');
+  perform t.chk('store: المستخدم لا يضيف', t.dml(ua, au, $q$insert into public.store_apps (repo, title) values ('owner/evil', 'x')$q$), 'ERR:42501');
+  perform t.chk('store: الزائر لا يضيف', t.dml(null, anon, $q$insert into public.store_apps (repo, title) values ('owner/evil', 'x')$q$), 'ERR:42501');
+  perform t.chk('store: مستودع بصيغة خاطئة مرفوض', t.dml(uc, au, $q$insert into public.store_apps (repo, title) values ('no slash', 'x')$q$), 'ERR:23514');
+  perform t.chk('store: تكرار المستودع مرفوض', t.dml(uc, au, $q$insert into public.store_apps (repo, title) values ('owner/app-one', 'y')$q$), 'ERR:23505');
+  perform t.chk('store: رابط apk غير github مرفوض', t.dml(uc, au, $q$update public.store_apps set apk_url='https://evil.example/a.apk' where repo='owner/app-one'$q$), 'ERR:23514');
+  perform t.chk('store: رابط apk غير https مرفوض', t.dml(uc, au, $q$update public.store_apps set apk_url='http://github.com/o/r/releases/download/v1/a.apk' where repo='owner/app-one'$q$), 'ERR:23514');
+  perform t.chk('store: تصنيف غير معروف مرفوض', t.dml(uc, au, $q$update public.store_apps set category='x' where repo='owner/app-one'$q$), 'ERR:23514');
+  perform t.chk('store: المستخدم لا يعتمد', t.dml(ua, au, $q$update public.store_apps set status='approved'$q$), '0');
+  perform t.chk('store: الأدمن يعتمد ويضيف الرابط', t.dml(uc, au, $q$update public.store_apps set status='approved', apk_url='https://github.com/owner/app-one/releases/download/v1/app.apk', category='tools' where repo='owner/app-one'$q$), '1');
+  perform t.chk('store: المعتمد يراه الزائر', t.sel(null, anon, 'select count(*) from public.store_apps'), '1');
+  perform t.chk('store: المعتمد يراه المستخدم', t.sel(ua, au, 'select count(*) from public.store_apps'), '1');
+  perform t.chk('store: الزائر لا يعدّل', t.dml(null, anon, $q$update public.store_apps set title='x'$q$), 'ERR:42501');
+  perform t.chk('store: المستخدم لا يحذف', t.dml(ua, au, 'delete from public.store_apps'), '0');
+  perform t.chk('store: الأدمن يحذف', t.dml(uc, au, 'delete from public.store_apps'), '1');
   perform t.chk('fetch: news_refs للأدمن فقط', t.sel(ua, au, 'select count(*) from public.news_refs'), '0');
   perform t.chk('fetch: الزائر لا يقرأ news_refs', t.sel(null, anon, 'select count(*) from public.news_refs'), 'ERR:42501');
 

@@ -20,6 +20,7 @@ class DrawerLogicTest {
         assertEquals(4, a.count { it == DrawerAction.REGION })
         assertTrue(DrawerAction.SIGN_IN in a); assertFalse(DrawerAction.SIGN_OUT in a)
         assertFalse(DrawerAction.NOTIFICATIONS in a); assertFalse(DrawerAction.ADMIN in a); assertFalse(DrawerAction.MY_POSTS in a)
+        assertTrue(DrawerAction.STORE in a)   // المتجر للجميع
     }
 
     @Test fun userSeesAccountToolsButNotAdmin() {
@@ -43,14 +44,14 @@ class DrawerLogicTest {
     @Test fun sections_guest() {
         val s = DrawerLogic.sections(null)
         assertEquals(5, s.shortcuts.size)                       // الرئيسية + 4 مناطق
-        assertEquals(listOf(DrawerAction.SAVED), s.main.map { it.action })
+        assertEquals(listOf(DrawerAction.SAVED, DrawerAction.STORE), s.main.map { it.action })
         assertEquals(listOf(DrawerAction.SETTINGS), s.more.map { it.action })
         assertEquals(DrawerAction.SIGN_IN, s.footer?.action)
     }
 
     @Test fun sections_adminUserGetsToolsAndAdminUnderMore() {
         val s = DrawerLogic.sections(user(admin = true))
-        assertEquals(listOf(DrawerAction.SAVED, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST), s.main.map { it.action })
+        assertEquals(listOf(DrawerAction.SAVED, DrawerAction.STORE, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST), s.main.map { it.action })
         assertEquals(listOf(DrawerAction.VERIFICATION, DrawerAction.SETTINGS, DrawerAction.ADMIN), s.more.map { it.action })
         assertEquals(DrawerAction.SIGN_OUT, s.footer?.action)
     }

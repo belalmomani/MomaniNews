@@ -41,7 +41,7 @@ import com.momaninews.app.data.model.Regions
 import com.momaninews.app.data.model.User
 import com.momaninews.app.data.model.VerificationStatus
 
-enum class DrawerAction { HOME, REGION, PROFILE, NOTIFICATIONS, SAVED, MY_POSTS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
+enum class DrawerAction { HOME, REGION, PROFILE, NOTIFICATIONS, SAVED, STORE, MY_POSTS, AD_REQUEST, VERIFICATION, SETTINGS, ADMIN, SIGN_IN, SIGN_OUT }
 
 data class DrawerEntry(val action: DrawerAction, val label: String, val regionId: String? = null)
 
@@ -52,6 +52,7 @@ object DrawerLogic {
         add(DrawerEntry(DrawerAction.HOME, "الرئيسية"))
         Regions.all.forEach { add(DrawerEntry(DrawerAction.REGION, it.nameAr, it.id)) }
         add(DrawerEntry(DrawerAction.SAVED, "المحفوظات"))
+        add(DrawerEntry(DrawerAction.STORE, "متجري"))
         if (user != null) {
             add(DrawerEntry(DrawerAction.NOTIFICATIONS, "الإشعارات"))
             add(DrawerEntry(DrawerAction.MY_POSTS, "منشوراتي"))
@@ -78,7 +79,7 @@ object DrawerLogic {
         fun pick(vararg a: DrawerAction) = all.filter { it.action in a }
         return Sections(
             shortcuts = pick(DrawerAction.HOME, DrawerAction.REGION),
-            main = pick(DrawerAction.SAVED, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST),
+            main = pick(DrawerAction.SAVED, DrawerAction.STORE, DrawerAction.NOTIFICATIONS, DrawerAction.MY_POSTS, DrawerAction.AD_REQUEST),
             more = pick(DrawerAction.VERIFICATION, DrawerAction.SETTINGS, DrawerAction.ADMIN),
             footer = all.firstOrNull { it.action == DrawerAction.SIGN_IN || it.action == DrawerAction.SIGN_OUT }
         )
@@ -89,6 +90,7 @@ object DrawerLogic {
 
 private fun iconFor(a: DrawerAction): ImageVector = when (a) {
     DrawerAction.SAVED -> Icons.Default.Star
+    DrawerAction.STORE -> Icons.Default.ShoppingCart
     DrawerAction.NOTIFICATIONS -> Icons.Default.Notifications
     DrawerAction.MY_POSTS -> Icons.Default.Edit
     DrawerAction.AD_REQUEST -> Icons.Default.Info

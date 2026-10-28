@@ -68,6 +68,7 @@ fun AdminHomeScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                     "التعليقات" to "admin/comments",
                     "طلبات التوثيق" to "admin/verification",
                     "الإعلانات" to "admin/ads",
+                    "متجري (تطبيقات GitHub)" to "admin/store",
                     "المستخدمون" to "admin/users",
                     "إرسال إشعار عام" to "admin/notify"
                 ).forEach { (label, route) ->
@@ -366,3 +367,39 @@ private fun categoryAction(r: com.momaninews.app.data.admin.AdminRepository) = A
     ),
     compose = { _, p -> p[0] }
 ) { i, text -> r.setNewsCategory(i.ref, text ?: "") }
+
+private fun storeCategoryGroup() = ChoiceGroup("التصنيف", com.momaninews.app.data.store.StoreLogic.categories.map { it.label to it.wire })
+
+private fun storeCommon(s: com.momaninews.app.data.store.StoreAdminRepository, n: AdminItem) = listOf(
+    AdminAction("تحديث من GitHub (إصدار وصور)") { i, _ -> s.refresh(i.ref, i.source) },
+    AdminAction("تعديل الاسم", prompt = "الاسم المعروض", promptDefault = n.title) { i, t -> s.setTitle(i.ref, t ?: "") },
+    AdminAction("تعديل الوصف", prompt = "الوصف المعروض", promptDefault = n.extra) { i, t -> s.setDescription(i.ref, t ?: "") },
+    AdminAction("حذف", danger = true, confirm = "حذف التطبيق من المتجر نهائياً؟") { i, _ -> s.delete(i.ref) }
+)
+
+@Composable
+fun AdminStoreScreen(onBack: () -> Unit) = AdminGate("متجري", onBack) { _ ->
+    val s = com.momaninews.app.data.store.StoreAdminRepositories.default
+    if (s != null) AdminListScreen(
+        "متجري", onBack, listOf(
+            AdminTab("بانتظار الاعتماد", "لا توجد تطبيقات معلّقة", {
+                listOf(AdminItem(ref = "add", title = "＋ إضافة تطبيق من GitHub", meta = "اكتب owner/name أو رابط المستودع. تُسحب المعلومات والأيقونة واللقطات من المجلد store/ في المستودع وآخر إصدار فيه ملف apk.")) + s.list("pending")
+            }) { n ->
+                if (n.ref == "add") listOf(AdminAction("إضافة", prompt = "owner/name أو https://github.com/owner/name") { _, t -> s.addFromGitHub(t ?: "") })
+                else listOf(
+                    AdminAction("اعتماد وتصنيف", groups = listOf(storeCategoryGroup()), compose = { _, p -> p[0] }) { i, c -> s.approve(i.ref, c ?: "other") },
+                    AdminAction("رفض", danger = true, confirm = "رفض التطبيق؟") { i, _ -> s.setStatus(i.ref, "rejected") }
+                ) + storeCommon(s, n)
+            },
+            AdminTab("المعتمدة", "لا توجد تطبيقات معتمدة", { s.list("approved") }) { n -> listOf(
+                AdminAction("تغيير التصنيف", groups = listOf(storeCategoryGroup()), compose = { _, p -> p[0] }) { i, c -> s.setCategory(i.ref, c ?: "other") },
+                AdminAction("إلغاء الاعتماد (يختفي من المتجر)", confirm = "إخفاء التطبيق من المتجر؟") { i, _ -> s.setStatus(i.ref, "pending") }
+            ) + storeCommon(s, n) },
+            AdminTab("المرفوضة", "لا توجد تطبيقات مرفوضة", { s.list("rejected") }) { n -> listOf(
+                AdminAction("إعادة للمراجعة") { i, _ -> s.setStatus(i.ref, "pending") }
+            ) + storeCommon(s, n) }
+        )
+    ) else ScreenScaffold(title = "متجري", onBack = onBack) { p ->
+        Column(Modifier.fillMaxSize().padding(p)) { MessageState("غير متاح", "المتجر غير متاح في الوضع التجريبي.") }
+    }
+}

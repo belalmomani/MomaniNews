@@ -78,6 +78,7 @@ fun HomeScreen(
     onComposeClick: () -> Unit = {},
     onMyPostsClick: () -> Unit = {},
     onSavedClick: () -> Unit = {},
+    onStoreClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val auth = AuthRepositories.default
@@ -157,6 +158,7 @@ fun HomeScreen(
                         DrawerAction.NOTIFICATIONS -> onNotificationsClick()
                         DrawerAction.MY_POSTS -> onMyPostsClick()
                         DrawerAction.SAVED -> onSavedClick()
+                        DrawerAction.STORE -> onStoreClick()
                         DrawerAction.AD_REQUEST -> onAdRequestClick()
                         DrawerAction.VERIFICATION -> onVerificationClick()
                         DrawerAction.SETTINGS -> onSettingsClick()
