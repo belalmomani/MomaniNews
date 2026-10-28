@@ -371,7 +371,7 @@ private fun categoryAction(r: com.momaninews.app.data.admin.AdminRepository) = A
 private fun storeCategoryGroup() = ChoiceGroup("التصنيف", com.momaninews.app.data.store.StoreLogic.categories.map { it.label to it.wire })
 
 private fun storeCommon(s: com.momaninews.app.data.store.StoreAdminRepository, n: AdminItem) = listOf(
-    AdminAction("تحديث من GitHub (إصدار وصور)") { i, _ -> s.refresh(i.ref, i.source) },
+    AdminAction("تحديث من GitHub (إصدار وصور ووصف فارغ)") { i, _ -> s.refresh(i.ref, i.source, i.extra) },
     AdminAction("تعديل الاسم", prompt = "الاسم المعروض", promptDefault = n.title) { i, t -> s.setTitle(i.ref, t ?: "") },
     AdminAction("تعديل الوصف", prompt = "الوصف المعروض", promptDefault = n.extra) { i, t -> s.setDescription(i.ref, t ?: "") },
     AdminAction("حذف", danger = true, confirm = "حذف التطبيق من المتجر نهائياً؟") { i, _ -> s.delete(i.ref) }

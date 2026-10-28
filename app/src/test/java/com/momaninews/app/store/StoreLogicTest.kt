@@ -111,4 +111,27 @@ class StoreLogicTest {
         assertEquals("my_app.apk", StoreLogic.fileName(app(1, v = null, repo = "o/my app")))
         assertFalse(StoreLogic.fileName(app(1, v = "../x", repo = "o/r")).contains("/"))
     }
+
+    @Test fun readmeSummary_firstTextParagraph() {
+        val md = "# عنوان\n\n![شارة](https://x/y.png)\n[![b](https://img/b.svg)](https://x)\n\nتطبيق **أخبار** محلي، انظر [الموقع](https://a.b) للتفاصيل.\nسطر ثانٍ.\n\n## ثانياً\nنص آخر"
+        assertEquals("تطبيق أخبار محلي، انظر الموقع للتفاصيل. سطر ثانٍ.", StoreLogic.readmeSummary(md))
+        assertEquals("", StoreLogic.readmeSummary("# فقط عنوان\n\n![img](a.png)"))
+        assertEquals(10, StoreLogic.readmeSummary("x".repeat(50), 10).length)
+    }
+
+    @Test fun readmeImages_resolvesAndFilters() {
+        val md = """
+            ![a](docs/shot1.png) ![b](./shots/two.JPG?raw=1) ![c](https://raw.githubusercontent.com/o/r/main/three.webp)
+            ![badge](https://img.shields.io/badge/x-y-green.svg) ![svg](docs/logo.svg) ![evil](https://evil.example/e.png)
+            ![dots](../secret.png) ![http](http://raw.githubusercontent.com/o/r/main/h.png) ![dup](docs/shot1.png)
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                "https://raw.githubusercontent.com/o/r/HEAD/docs/shot1.png",
+                "https://raw.githubusercontent.com/o/r/HEAD/shots/two.JPG?raw=1",
+                "https://raw.githubusercontent.com/o/r/main/three.webp"
+            ),
+            StoreLogic.readmeImages(md, "o/r")
+        )
+    }
 }

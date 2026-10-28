@@ -162,6 +162,39 @@ object StoreLogic {
         return icon to shots
     }
 
+    private val MD_IMAGE = Regex("!\\[[^\\]]*]\\(\\s*<?([^)\\s>]+)>?(?:\\s+\"[^\"]*\")?\\s*\\)")
+    private val MD_LINK = Regex("\\[([^\\]]*)]\\([^)]*\\)")
+
+    /** أول فقرة نصية من README (بلا عناوين وشارات وصور وHTML) كوصف مبدئي؛ فارغ إن لم توجد. */
+    fun readmeSummary(md: String, max: Int = 600): String {
+        val paras = mutableListOf<String>()
+        var cur = StringBuilder()
+        fun flush() { if (cur.isNotBlank()) paras += cur.toString().trim(); cur = StringBuilder() }
+        for (raw in md.lineSequence()) {
+            val line = raw.trim()
+            if (line.isEmpty()) { flush(); continue }
+            if (line.startsWith("#") || line.startsWith("!") || line.startsWith("<") || line.startsWith("```") ||
+                line.startsWith("|") || line.startsWith("---") || line.startsWith("[![")) { flush(); continue }
+            cur.append(line).append(' ')
+        }
+        flush()
+        val first = paras.firstOrNull() ?: return ""
+        return first.replace(MD_LINK, "$1").replace(Regex("[*_`>]+"), "").replace(Regex("\\s+"), " ").trim().take(max)
+    }
+
+    /** صور README (png/jpg/webp فقط، لا svg/شارات) كروابط موثوقة؛ النسبية تُحوَّل إلى raw.githubusercontent.com. */
+    fun readmeImages(md: String, repo: String): List<String> =
+        MD_IMAGE.findAll(md).map { it.groupValues[1] }.mapNotNull { u ->
+            val abs = when {
+                u.startsWith("https://") -> u
+                u.startsWith("http://") || u.contains("://") || u.startsWith("//") -> null
+                u.contains("..") -> null
+                else -> "https://raw.githubusercontent.com/$repo/HEAD/" + u.removePrefix("./").removePrefix("/")
+            } ?: return@mapNotNull null
+            val ext = abs.substringBefore('?').substringAfterLast('.', "").lowercase()
+            abs.takeIf { ext in IMG_EXT && isTrustedImage(it) }
+        }.distinct().take(MAX_SHOTS).toList()
+
     fun avatarUrl(repo: String): String = "https://github.com/${repo.substringBefore('/')}.png"
 }
 
@@ -215,13 +248,13 @@ object StoreDownloader {
 object GitHubStoreSync {
     private const val UA = "MomaniNewsBot"
 
-    private fun getJson(url: String): String? {
+    private fun getJson(url: String, accept: String = "application/vnd.github+json"): String? {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 10_000
             c.readTimeout = 15_000
             c.setRequestProperty("User-Agent", UA)
-            c.setRequestProperty("Accept", "application/vnd.github+json")
+            c.setRequestProperty("Accept", accept)
             val code = c.responseCode
             if (code == 404) return null
             if (code !in 200..299) throw IOException("GitHub HTTP $code")
@@ -239,12 +272,14 @@ object GitHubStoreSync {
         val desc = if (o.isNull("description")) "" else o.optString("description", "").trim().take(2000)
         val rel = getJson("https://api.github.com/repos/$repo/releases/latest")?.let { StoreLogic.parseLatestApk(it, repo) }
         val media = getJson("https://api.github.com/repos/$repo/contents/store")?.let { StoreLogic.pickMedia(it) } ?: (null to emptyList())
+        // README: وصف بديل إن لم يكن للمستودع وصف، وصور بديلة إن لم توجد لقطات في store/
+        val readme = if (desc.isBlank() || media.second.isEmpty()) runCatching { getJson("https://api.github.com/repos/$repo/readme", "application/vnd.github.raw+json") }.getOrNull() else null
         GitHubAppInfo(
             repo = repo,
             title = name.take(100),
-            description = desc,
+            description = desc.ifBlank { readme?.let { StoreLogic.readmeSummary(it) } ?: "" },
             iconUrl = media.first ?: StoreLogic.avatarUrl(repo),
-            screenshots = media.second,
+            screenshots = media.second.ifEmpty { readme?.let { StoreLogic.readmeImages(it, repo) } ?: emptyList() },
             apkUrl = rel?.first,
             versionName = rel?.third,
             sizeBytes = rel?.second
@@ -303,7 +338,7 @@ class StoreAdminRepository(private val rest: SupabaseRest, private val session: 
         .put("size_bytes", i.sizeBytes ?: JSONObject.NULL)
 
     /** يحدّث الإصدار والملف والصور من GitHub، ويُبقي الاسم والوصف والتصنيف كما عدّلها المدير. */
-    suspend fun refresh(ref: String, repo: String) {
+    suspend fun refresh(ref: String, repo: String, currentDescription: String = "") {
         val i = GitHubStoreSync.fetch(repo)
         val b = JSONObject()
             .put("icon_url", i.iconUrl ?: JSONObject.NULL)
@@ -311,6 +346,7 @@ class StoreAdminRepository(private val rest: SupabaseRest, private val session: 
             .put("apk_url", i.apkUrl ?: JSONObject.NULL)
             .put("version_name", i.versionName ?: JSONObject.NULL)
             .put("size_bytes", i.sizeBytes ?: JSONObject.NULL)
+        if (currentDescription.isBlank() && i.description.isNotBlank()) b.put("description", i.description)   // لا نكتب فوق وصف عدّله المدير
         write("PATCH", "store_apps?id=eq.${idOf(ref)}", b)
     }
 
