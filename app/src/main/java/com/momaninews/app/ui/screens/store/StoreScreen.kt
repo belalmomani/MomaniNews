@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -97,11 +99,13 @@ fun StoreScreen(onBack: () -> Unit) {
                         }
                     }
                     val shown = StoreLogic.filter(list, category)
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(shown, key = { it.id }) { app -> AppCard(app, onOpen = { selected = app }) }
+                        gridItems(shown, key = { it.id }) { app -> AppCard(app, onOpen = { selected = app }) }
                     }
                 }
             }
@@ -123,19 +127,20 @@ private fun AppCard(app: StoreApp, onOpen: () -> Unit) {
     val context = LocalContext.current
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(app.iconUrl, 56)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(app.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val meta = listOfNotNull(StoreLogic.categoryLabel(app.category), app.versionName, StoreLogic.formatSize(app.sizeBytes).ifEmpty { null }).joinToString(" · ")
-                Text(meta, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (app.description.isNotBlank()) Text(app.description, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            if (app.apkUrl != null) Button(onClick = { startDownload(context, app) }) { Text("تنزيل") }
+        Column(
+            Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            AppIcon(app.iconUrl, 72)
+            Text(app.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val meta = listOfNotNull(StoreLogic.categoryLabel(app.category), StoreLogic.formatSize(app.sizeBytes).ifEmpty { null }).joinToString(" · ")
+            Text(meta, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (app.apkUrl != null) Button(onClick = { startDownload(context, app) }, modifier = Modifier.fillMaxWidth()) { Text("تنزيل") }
         }
     }
 }
@@ -170,10 +175,6 @@ private fun AppDialog(app: StoreApp, onDismiss: () -> Unit) {
                     }
                 }
                 if (app.description.isNotBlank()) Text(app.description, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "التطبيق من مستودع GitHub «${app.repo}» ويُنزَّل مباشرة من إصداراته. بعد التنزيل اسمح للنظام بالتثبيت من هذا المصدر عند طلبه.",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 if (app.apkUrl != null) Button(onClick = { startDownload(context, app) }, modifier = Modifier.fillMaxWidth()) { Text("تنزيل مباشر") }
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("إغلاق") }
             }
